@@ -1,20 +1,55 @@
 $port = nil
 $hostname = nil
+$routingTable = Hash.new
+$timer = nil 
 
+class Timer
+	DELTA_T = ONE_SECOND = 1
+	
+	def initialize
+		@startTime = Time.new
+		@curTime = @startTime
+		@timeUpdater = Thread.new {
+			loop do
+				sleep(DELTA_T)
+				$curTime += DELTA_T
+			end
+		}
+		def startTime
+			@starTime
+		end
+		
+		def curTime
+			@curTime
+		end
+
+		def runTime
+			@curTime - @startTime
+		end
+	end
+end
 
 
 # --------------------- Part 0 --------------------- # 
 
 def edgeb(cmd)
-	STDOUT.puts "EDGE: not implemented"
+	$routingTable[cmd[1]] = 1
 end
 
 def dumptable(cmd)
-	STDOUT.puts "DUMPTABLE: not implemented"
+	File.open(cmd[0], "w"){ |file| $routingTable.each do |key,value|
+		puts $hostname,key,key,value
+	end
+	}
+
+# $routingTable.each do |key,value|
+#$hostname,key,key,value end
+#{ |file| file.puts "test"}
 end
 
 def shutdown(cmd)
-	STDOUT.puts "SHUTDOWN: not implemented"
+	STDOUT.flush
+	STDERR.flush
 	exit(0)
 end
 
@@ -88,7 +123,7 @@ end
 def setup(hostname, port, nodes, config)
 	$hostname = hostname
 	$port = port
-
+	$timer = Timer.new
 	#set up ports, server, buffers
 
 	main()
