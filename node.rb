@@ -1,8 +1,6 @@
 $port = nil
 $hostname = nil
-
-
-
+$timer = nil
 # --------------------- Part 0 --------------------- # 
 
 def edgeb(cmd)
@@ -83,13 +81,12 @@ def setup(hostname, port)
 	$hostname = hostname
 	$port = port
 
-	#set up ports, server, buffers
-
 	main()
 
 end
 
 setup(ARGV[0], ARGV[1])
+
 
 
 
