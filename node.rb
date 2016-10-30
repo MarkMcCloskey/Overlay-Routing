@@ -1,6 +1,8 @@
 $port = nil
 $hostname = nil
-$timer = nil
+
+
+
 # --------------------- Part 0 --------------------- # 
 
 def edgeb(cmd)
@@ -8,7 +10,7 @@ def edgeb(cmd)
 end
 
 def dumptable(cmd)
-	puts "DUMPTABLE: not implemented"
+	STDOUT.puts "DUMPTABLE: not implemented"
 end
 
 def shutdown(cmd)
@@ -49,6 +51,11 @@ def ftp(cmd)
 	STDOUT.puts "FTP: not implemented"
 end
 
+# --------------------- Part 3 --------------------- # 
+def circuit(cmd)
+	STDOUT.puts "CIRCUIT: not implemented"
+end
+
 
 
 
@@ -71,22 +78,24 @@ def main()
 		when "PING"; ping(args)
 		when "TRACEROUTE"; traceroute(args)
 		when "FTP"; ftp(args)
+		when "CIRCUIT"; circuit(args)
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 	end
 
 end
 
-def setup(hostname, port)
+def setup(hostname, port, nodes, config)
 	$hostname = hostname
 	$port = port
+
+	#set up ports, server, buffers
 
 	main()
 
 end
 
-setup(ARGV[0], ARGV[1])
-
+setup(ARGV[0], ARGV[1], ARGV[2], ARGV[3])
 
 
 
