@@ -7,7 +7,7 @@ class TestTimer < Test::Unit::TestCase
 		puts time.startTime
 		sleep 5
 		puts time.curTime
-		puts time.runTim
+		puts time.runTime
 	end
 end
 

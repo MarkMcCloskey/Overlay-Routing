@@ -12,15 +12,15 @@ class Timer
 		}
 
 		def startTime
-			$startTime
+			return $startTime
 		end
 
 		def curTime
-			$curTime
+			return $curTime
 		end
 
 		def runTime
-			$curTime - $startTime
+			return $curTime - $startTime
 		end
 	end
 end

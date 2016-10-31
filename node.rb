@@ -31,8 +31,11 @@ end
 
 
 # --------------------- Part 0 --------------------- # 
-
+#srcip dstip dst
 def edgeb(cmd)
+	#update srcip routing table
+	#connect to dstip using nodes.txt port #'s
+	#
 	$routingTable[cmd[1]] = 1
 end
 
@@ -125,10 +128,19 @@ def setup(hostname, port, nodes, config)
 	$port = port
 	$timer = Timer.new
 	#set up ports, server, buffers
-
+	#create hash from nodes.txt nodeName => portNo
+	#need AT LEAST 2 buffers 1  for command receipt and 1 for packets
+	
 	main()
 
 end
+
+def parseConfig(file)
+	f = file.open
+# for every line parse the value and store into global variables
+#we'll need to use these variables throughout the nodes methods
+end
+
 
 setup(ARGV[0], ARGV[1], ARGV[2], ARGV[3])
 
