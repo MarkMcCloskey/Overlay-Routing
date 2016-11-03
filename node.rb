@@ -2,26 +2,31 @@ $port = nil
 $hostname = nil
 $routingTable = Hash.new
 $timer = nil 
-
+$updateInterval = nil
+$maxPayload = nil
+$pingTimeout = nil
+$nodesToPort = Hash.new
+#MARK FIGURE OUT HOW TO USE ATTR_ACCESSOR AND USE CLASS VARIABLES
 class Timer
 	DELTA_T = ONE_SECOND = 1
-	
+	attr_accessor :starTime
+	attr_accessor :curTime
 	def initialize
 		@startTime = Time.new
 		@curTime = @startTime
 		@timeUpdater = Thread.new {
 			loop do
 				sleep(DELTA_T)
-				$curTime += DELTA_T
+				@curTime += DELTA_T
 			end
 		}
-		def startTime
-			@starTime
-		end
+		#def startTime
+		#	@starTime
+		#end
 		
-		def curTime
-			@curTime
-		end
+		#def curTime
+		#	@curTime
+		#end
 
 		def runTime
 			@curTime - @startTime
@@ -117,6 +122,14 @@ def main()
 		when "TRACEROUTE"; traceroute(args)
 		when "FTP"; ftp(args)
 		when "CIRCUIT"; circuit(args)
+		when "hostname"; hostname
+		when "updateInterval"; puts $updateInterval
+		when "maxPayload"; puts $maxPayload
+		when "pingTimeout"; puts $pingTimeout
+		when "nodesToPort";puts $nodesToPort
+		when "curTime"; puts $timer.curTime
+		when "startTime"; puts $timer.startTime
+		when "runTime";puts $timer.runTime
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 	end
@@ -127,6 +140,8 @@ def setup(hostname, port, nodes, config)
 	$hostname = hostname
 	$port = port
 	$timer = Timer.new
+	parseConfig(config)
+	parseNodes(nodes)
 	#set up ports, server, buffers
 	#create hash from nodes.txt nodeName => portNo
 	#need AT LEAST 2 buffers 1  for command receipt and 1 for packets
@@ -136,9 +151,23 @@ def setup(hostname, port, nodes, config)
 end
 
 def parseConfig(file)
-	f = file.open
-# for every line parse the value and store into global variables
-#we'll need to use these variables throughout the nodes methods
+	File.foreach(file){ |line|
+		pieces = line.partition("=")
+		if pieces[0] == "updateInterval"
+			$updateInterval = pieces[2]
+		elsif pieces[0] == "maxPayload"
+			$maxPayload = pieces[2]
+		elsif pieces[0] == "pingTimeout"
+			$pingTimeout = pieces[2]
+		end
+	}
+end
+
+def parseNodes(file)
+	File.foreach(file){ |line|
+		pieces = line.partition(",")
+		$nodesToPort[pieces[0]] = pieces[2].to_i
+	}
 end
 
 

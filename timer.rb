@@ -7,20 +7,20 @@ class Timer
 		@timeUpdater = Thread.new {
 			loop do
 				sleep(DELTA_T)
-				$curTime += DELTA_T
+				@curTime += DELTA_T
 			end
 		}
 
 		def startTime
-			return $startTime
+			return @startTime
 		end
 
 		def curTime
-			return $curTime
+			return @curTime
 		end
 
 		def runTime
-			return $curTime - $startTime
+			return @curTime - @startTime
 		end
 	end
 end
