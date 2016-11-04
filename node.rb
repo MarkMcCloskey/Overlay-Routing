@@ -1,12 +1,33 @@
 $port = nil
 $hostname = nil
+$nodes = nil
+$nextHop = nil
+$cost = nil
+$tcpH = nil
+$neighbor = nil
+$updateInteveral = nil
+$maxPayload = nil
+$pingTimeOut = nil
+$timeout = nil
 
 
 
 # --------------------- Part 0 --------------------- # 
 
 def edgeb(cmd)
-	STDOUT.puts "EDGE: not implemented"
+	srcIp = cmd[0]
+	dstIp = cmd[1]
+	dst = cmd[2]
+
+	if (neigbor[dst])
+		STDOUT.puts "Edge Already Exists"
+		return
+
+	tcpH[$hostname] = connect(srcIp, dstIp)
+	nextHop[dst] = dst
+	cost[dst] = 1
+
+	send("edgeb", [srcIp, $hostname, $port)
 end
 
 def dumptable(cmd)
@@ -90,6 +111,18 @@ def setup(hostname, port, nodes, config)
 	$port = port
 
 	#set up ports, server, buffers
+	readNodes(nodes)
+	readConfig(config)
+
+	nextHop = Hash.new("-")
+
+	cost = Hash.new(1.0/0.0) #inf
+	cost[$hostname] = 0;
+
+	neighbor = Hash.new
+	tcpH = Hash.new
+
+	listen()
 
 	main()
 
