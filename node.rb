@@ -3,12 +3,45 @@ $hostname = nil
 $nodes = nil
 $nextHop = nil
 $cost = nil
-$tcpH = nil
+$tcpH = nil # Don't exactly know how TCP objects work in ruby so this might be modified
 $neighbor = nil
 $updateInteveral = nil
 $maxPayload = nil
 $pingTimeOut = nil
 $timeout = nil
+
+# Main Loop Processor:
+# 	While reading a line from the terminal
+# 		send line to the internal command buffer
+
+# Internal Command Processor:
+#  	For every command in the internal command buffer
+# 		Call its corresponding function
+
+# Alternative Main Loop Processor:
+# 	For every line from the terminal
+# 		create a new thread for each function call
+
+# Idk which one works or if thats how threads work fully
+
+# Packet Processor:
+#	For every packet in the packet buffer
+# 		If the packets final destination is not this node
+# 			forward the packet (extract final dst, call forwardPacket(packet, final dst))
+# 		Else
+# 			If ALL of the sibling packets are in the buffer
+# 				Insert all of the sibling packets into an array (if they aren't already)
+# 				and forward them to the external command buffer
+# 			Else
+# 				Continue
+
+# External Command Procesor:
+# 	For every packet array in the external command buffer (maybe we need a better name for this buffer)
+# 		Call a function that reconstructs the payload from all of the packets
+# 		Send the payload to its respective function. (This would be an external command function controller
+# 		similar to what we have for terminal commands)
+
+# 
 
 
 
@@ -27,7 +60,9 @@ def edgeb(cmd)
 	nextHop[dst] = dst
 	cost[dst] = 1
 
-	send("edgeb", [srcIp, $hostname, $port)
+	payload = [srcIp, $hostname, $port].join(",")
+
+	send("edgeb", payload, dst)
 end
 
 def dumptable(cmd)
@@ -111,23 +146,57 @@ def setup(hostname, port, nodes, config)
 	$port = port
 
 	#set up ports, server, buffers
+
+	# Reads the nodes file and stores its node => port$ into $nodes hash 
 	readNodes(nodes)
+
+	# Reads the config file and stores its contents into $updateInteveral,
+	# $maxPayload, and $pingTimeOut
 	readConfig(config)
 
+	# Initializes the hashes used for the routing tables
 	nextHop = Hash.new("-")
-
 	cost = Hash.new(1.0/0.0) #inf
 	cost[$hostname] = 0;
 
+	# Initializes the hashes used for neighbor checking and TCP object connections
 	neighbor = Hash.new
 	tcpH = Hash.new
 
+	# Calls function that initializes the node to listen for incoming connection requests
+	# Maybe should be replaced with a function that initializes all of the threads and
+	# inside includes the listen function()
 	listen()
 
 	main()
 
 end
 
+# Send function for commands from this node's terminal NOT for commands from other nodes
+# Fragments the payload, adds the IP header to each packet, and sends each packet to
+# the next node
+def send(cmd, payload, dst)
+	fragments = payload.chars.to_a.each_slice($maxPayload).to_a.map{|s| s.to_s}
+	packets = createPackets(cmd, fragments, dst)
+
+	packets.each { |p|
+		tcpSend(p, $nextHop[dst])
+	}
+end
+
+# Function called by packet buffer processors
+def forwardPacket(packet,dst)
+	tcpSend(packet, $nextHop[dst])
+end
+
+def tcpSend(packet, nextHop)
+	tcp = $tcpH[nextHop]
+
+	# Code for actually sending the packet to the next node here. 
+	# (If there is a tcp error, ignore it and let the timeout handle it)
+
+
+end
 setup(ARGV[0], ARGV[1], ARGV[2], ARGV[3])
 
 
