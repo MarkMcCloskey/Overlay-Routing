@@ -1,14 +1,24 @@
-$port = nil
-$hostname = nil
-$nodes = nil
-$nextHop = nil
-$cost = nil
-$tcpH = nil # Don't exactly know how TCP objects work in ruby so this might be modified
-$neighbor = nil
-$updateInteveral = nil
-$maxPayload = nil
-$pingTimeOut = nil
-$timeout = nil
+$port # This node's port number
+$hostname # This node's name
+$nodes # Hash of all nodes in the universe (nodeName => portNumber)
+
+# Following Hashes only contain information with neighbors
+$nextHop # nodeName => nodeName
+$cost # nodeName => integer cost
+$tcpH # Don't exactly know how TCP objects work in ruby so this might be modified
+$neighbor # nodeName => boolean
+
+$updateInteveral
+$maxPayload
+$pingTimeOut
+$timeout
+
+$intComBuf
+$extComBuf
+$packetBuf
+
+$nextMsgId
+
 
 # Main Loop Processor:
 # 	While reading a line from the terminal
@@ -59,16 +69,39 @@ def edgeb(cmd)
 	tcpH[$hostname] = connect(srcIp, dstIp)
 	nextHop[dst] = dst
 	cost[dst] = 1
+	neighbor[dst] = true
 
-	payload = [srcIp, $hostname, $port].join(",")
+	payload = [srcIp, $hostname].join(",")
 
 	send("edgeb", payload, dst)
 end
 
-def dumptable(cmd)
-	STDOUT.puts "DUMPTABLE: not implemented"
+def edgebExt(cmd)
+	srcIp = cmd[0]
+	node = cmd[1]
+
+	nextHop[node] = node
+	cost[node] = 1
+
+	neighbor[node] = true
+
+	# If we decide to duplex or when we learn more about ruby tcp connections,
+	# then write the code for it here
+
+
+
 end
 
+def dumptable(fileName)
+	CSV.open(fileName, "wb") { |csv|
+		$cost.each_key { |node|
+			csv << [$hostname, node, $nextHop[node], $cost[node]]
+		}
+	}
+
+end
+
+# Close connections and empty buffers
 def shutdown(cmd)
 	STDOUT.puts "SHUTDOWN: not implemented"
 	exit(0)
@@ -163,6 +196,14 @@ def setup(hostname, port, nodes, config)
 	neighbor = Hash.new
 	tcpH = Hash.new
 
+	# Initialized buffers
+	$intComBuf = []
+	$extComBuf = []
+	$packetBuf = []
+
+	# Unique ID used for each message. Incremented for every new message
+	$nextMsgId = 0
+
 	# Calls function that initializes the node to listen for incoming connection requests
 	# Maybe should be replaced with a function that initializes all of the threads and
 	# inside includes the listen function()
@@ -184,11 +225,31 @@ def send(cmd, payload, dst)
 	}
 end
 
+# Appends header to each fragment
+def createPackets(cmd, fragments, dst)
+	packets = []
+
+	fragments.each_with_index { |f, idx|
+		src = $hostname
+
+		header = [src, dst, id, idx, cmd].join(",")
+
+		p = header + ":" + f
+
+		packets.push(p)
+	}
+
+	$nextMsgId = $nextMsgId + 1
+
+	return packets
+end
+
 # Function called by packet buffer processors
 def forwardPacket(packet,dst)
 	tcpSend(packet, $nextHop[dst])
 end
 
+# Function that actually calls the TCP function to send message
 def tcpSend(packet, nextHop)
 	tcp = $tcpH[nextHop]
 
