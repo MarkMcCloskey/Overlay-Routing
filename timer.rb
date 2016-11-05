@@ -1,6 +1,6 @@
 class Timer
 	DELTA_T = ONE_SECOND = 1
-
+	attr_accessor :startTime, :curTime, :timeUpdater
 	def initialize
 		@startTime = Time.new
 		@curTime = @startTime

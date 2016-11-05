@@ -1,16 +1,29 @@
+require 'thread'
+require 'socket'
+
+#given during node creation
 $port = nil
 $hostname = nil
-$routingTable = Hash.new
-$timer = nil 
+
+#read in from config
 $updateInterval = nil
 $maxPayload = nil
 $pingTimeout = nil
+
+#necessary variables
+$routingTable = Hash.new
+$timer = nil 
 $nodesToPort = Hash.new
-#MARK FIGURE OUT HOW TO USE ATTR_ACCESSOR AND USE CLASS VARIABLES
+$nodesToSocket = Hash.new
+$globalBuffer = Array.new 
+$sendBuffer = Array.new 
+$recvBuffer = Array.new 
+$inPorts = Array.new
+$outPorts = Array.new
+
 class Timer
 	DELTA_T = ONE_SECOND = 1
-	attr_accessor :starTime
-	attr_accessor :curTime
+	attr_accessor :startTime, :curTime
 	def initialize
 		@startTime = Time.new
 		@curTime = @startTime
@@ -20,13 +33,13 @@ class Timer
 				@curTime += DELTA_T
 			end
 		}
-		#def startTime
-		#	@starTime
-		#end
+		def startTime
+			@startTime
+		end
 		
-		#def curTime
-		#	@curTime
-		#end
+		def curTime
+			@curTime
+		end
 
 		def runTime
 			@curTime - @startTime
@@ -40,7 +53,6 @@ end
 def edgeb(cmd)
 	#update srcip routing table
 	#connect to dstip using nodes.txt port #'s
-	#
 	$routingTable[cmd[1]] = 1
 end
 
@@ -122,14 +134,15 @@ def main()
 		when "TRACEROUTE"; traceroute(args)
 		when "FTP"; ftp(args)
 		when "CIRCUIT"; circuit(args)
-		when "hostname"; hostname
+		when "hostname"; puts $hostname
 		when "updateInterval"; puts $updateInterval
 		when "maxPayload"; puts $maxPayload
 		when "pingTimeout"; puts $pingTimeout
 		when "nodesToPort";puts $nodesToPort
 		when "curTime"; puts $timer.curTime
 		when "startTime"; puts $timer.startTime
-		when "runTime";puts $timer.runTime
+		when "runTime"; puts $timer.runTime
+		when "port"; puts $port
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 	end
@@ -143,6 +156,14 @@ def setup(hostname, port, nodes, config)
 	parseConfig(config)
 	parseNodes(nodes)
 	#set up ports, server, buffers
+	
+	#needs to be threaded
+	#server = TCPServer.new port
+	#loop do 
+	#	client = server.accept
+	#	inPorts << client
+	#end
+	
 	#create hash from nodes.txt nodeName => portNo
 	#need AT LEAST 2 buffers 1  for command receipt and 1 for packets
 	
