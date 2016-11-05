@@ -61,8 +61,8 @@ def edgeb(cmd)
 	srcIp = cmd[0]
 	dstIp = cmd[1]
 	dst = cmd[2]
-
-	if (neigbor[dst])
+	#is this a good idea?
+	if ($neighbor[dst])
 		STDOUT.puts "Edge Already Exists"
 		return
 
@@ -232,7 +232,8 @@ def createPackets(cmd, fragments, dst)
 	fragments.each_with_index { |f, idx|
 		src = $hostname
 
-		header = [src, dst, id, idx, cmd].join(",")
+		header = [src, dst, id, idx, cmd, fragFlag, fragOffset,len,
+	    		ttl, routingType, routingType, path].join(",")
 
 		p = header + ":" + f
 
@@ -246,6 +247,11 @@ end
 
 # Function called by packet buffer processors
 def forwardPacket(packet,dst)
+	#before you send possibly fragment
+	#and nextHopwould be incorrect if it's a circuit
+	#instead make it a variable and decide before this line
+	#where it's going
+	
 	tcpSend(packet, $nextHop[dst])
 end
 
