@@ -140,6 +140,7 @@ def edgebExt(cmd)
 	cost[node] = 1
 
 	neighbor[node] = true
+	#createConnection()
 =begin
 	If we decide to duplex or when we learn more about ruby tcp
 	connections,
@@ -214,7 +215,7 @@ end
 
 # do main loop here.... 
 def main()
-	#	puts "in main"
+	#puts "in main" #for debugging
 	#start the thread that reads the command line input
 	$cmdLin = Thread.new do
 		getCmdLin()
@@ -223,8 +224,11 @@ def main()
 	$execute = Thread.new do
 		exTermCmd()
 	end
+=begin THIS IS CURRENTLY BROKEN MAKES PROGRAM HANG EVEN AFTER SHUTDOWN CALL
+	#start the thread that will accept incoming connections and read
+	#their input
 	$server = Thread.new do
-		server = TCPServer.new(port)
+		server = TCPServer.new($port)
 		loop do
 			Thread.start(server.accept) do |client|
 				#$inPorts << client
@@ -234,6 +238,7 @@ def main()
 			end
 		end
 	end
+=end
 	#make sure the program doesn't terminate prematurely
 	$cmdLin.join
 	$execute.join
@@ -284,7 +289,7 @@ def exTermCmd()
 end
 
 def setup(hostname, port, nodes, config)
-	puts "in setup"
+#	puts "in setup"
 
 	$hostname = hostname
 	$port = port
@@ -393,4 +398,11 @@ def tcpSend(packet, nextHop)
 
 end
 
+=begin
+	createConnection will take an array where the first element is
+	the 
+=end
+def createConnection(cmd)
+#	TCPSocket
+end
 setup(ARGV[0], ARGV[1], ARGV[2], ARGV[3])
