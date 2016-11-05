@@ -332,7 +332,7 @@ end
 def parseNodes(file)
 	File.foreach(file){ |line|
 		pieces = line.partition(",")
-		$nodesToPort[pieces[0]] = pieces[2].to_i
+		$nodeToPort[pieces[0]] = pieces[2].to_i
 	}
 end
 
@@ -343,7 +343,8 @@ Fragments the payload, adds the IP header to each packet, and sends each
 packet to the next node
 =end
 def send(cmd, payload, dst)
-	fragments = payload.chars.to_a.each_slice($maxPayload).to_a.map{|s| s.to_s}
+	fragments = payload.chars.to_a.each_slice($maxPayload).to_a.map{|s|
+			s.to_s}
 	packets = createPackets(cmd, fragments, dst)
 
 	packets.each { |p|
@@ -383,7 +384,8 @@ end
 
 # Function that actually calls the TCP function to send message
 def tcpSend(packet, nextHop)
-	tcp = $tcpH[nextHop]
+	#tcp = $tcpH[nextHop]
+	tcp = $nodeToPort[nextHop]
 	tcp.puts(p)
 	# Code for actually sending the packet to the next node here. 
 	# (If there is a tcp error, ignore it and let the timeout handle it)
