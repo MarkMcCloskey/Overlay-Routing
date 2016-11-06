@@ -236,8 +236,8 @@ def processPackets()
 			$packetHash[src][id][offset] = packet
 		end
 
-		$packetHash.each {|srcHash|
-			srcHash.each {|idHash|
+		$packetHash.each {|srcKey,srcHash|
+			srcHash.each {|idKey, idHash|
 				sum = 0
 				idHash.keys.sort.each {|k|
 					packet = idHash[k]
@@ -248,6 +248,7 @@ def processPackets()
 				if totLen == sum
 					payload = reconstructPayload(idHash)
 					$cmdLinBuffer << payload
+					packetHash[srcKey].delete(idKey)
 				end
 			}
 		}
