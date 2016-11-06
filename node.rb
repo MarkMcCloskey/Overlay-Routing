@@ -1,90 +1,41 @@
 require 'thread'
 require 'socket'
 
-#given during node creation
+# Properties for this node
 $port = nil
 $hostname = nil
-$nodes # Hash of all nodes in the universe (nodeName => portNumber)
-
-# Following Hashes only contain information with neighbors
-$nextHop # nodeName => nodeName
-$cost # nodeName => integer cost
-$tcpH # Don't exactly know how TCP objects work in ruby so this might be modified
-$neighbor # nodeName => boolean
-
-$timeout
-
-$intComBuf
-$extComBuf
-$packetBuf
-
-$nextMsgId
-
-=begin
-Main Loop Processor:
-	While reading a line from the terminal
-	send line to the internal command buffer
-
-Internal Command Processor:
-	For every command in the internal command buffer
- 	Call its corresponding function
-
-Alternative Main Loop Processor:
-	For every line from the terminal
-	create a new thread for each function call
-
-Idk which one works or if thats how threads work fully
-
-Packet Processor:
-	For every packet in the packet buffer
-	
-	If the packets final destination is not this node
-		forward the packet (extract final dst, call
-		forwardPacket(packet,final dst))
- 	Else
-		If ALL of the sibling packets are in the buffer
- 				Insert all of the sibling packets into an
-				array (if they aren't already)
- 				and forward them to the external command
-				buffer
-
-
- 		Else
-			Continue
-External Command Procesor:
-	For every packet array in the external command buffer (maybe we
-	need a better name for this buffer)
-		Call a function that reconstructs the payload from all of
-		the packets
- 		Send the payload to its respective function. (This would be
-		an external command function controller
- 		similar to what we have for terminal commands)
-=end
- 
-
-#read in from config
 $updateInterval = nil
 $maxPayload = nil
 $pingTimeout = nil
+$neighbor = Hash.new # Boolean hash. Returns true if a the key node is a neighbor
+$timeout = 100000000000000000000000000
+$nextMsgId = 0 # ID used for each unique message created in THIS node
 
-#necessary variables
-$routingTable = Hash.new
-$timer = nil 
-$nodeToPort = Hash.new
-$nodeToSocket = Hash.new
-$globalBuffer = Array.new 
-$sendBuffer = Array.new 
+# Routing Table hashes
+# NOTE: Does not contain data for currently 
+# 		unreachable nodes
+$nextHop = Hash.new # nodeName => nodeName
+$cost = Hash.new # nodeName => integer cost
+
+# TCP hashes
+$nodeToPort = Hash.new # Contains the port numbers of every node in our universe
+$nodeToSocket = Hash.new # Outgoing sockets to other nodes
+
+# Timer Object
+$timer
+
+# Buffers
 $recvBuffer = Array.new 
-$inPorts = Array.new
-$outPorts = Array.new
 $cmdLinBuffer = Array.new
-$packetHash = Hash.new { |h1, k1| h1[k1] =  Hash.new { |h2, k2| h2[k2] =  Hash.new}} # packetHash[src][id][offset]
+$packetHash = Hash.new { |h1, k1| h1[k1] =  Hash.new { # Buffer used to make packet processing easier
+			|h2, k2| h2[k2] =  Hash.new}} # packetHash[src][id][offset]
 
-#Threads
-$cmdLin = nil
-$execute = nil
-$server = nil
-$processPax = nil
+# Threads
+$cmdLin
+$execute
+$server
+$processPax
+$serverConnections = Array.new # Array of INCOMING connection threads
 
 class Timer
 	DELTA_T = ONE_SECOND = 1
@@ -124,9 +75,9 @@ def edgeb(cmd)
 		return
 	end
 	$nodeToSocket[dst] = TCPSocket.open(dstIp, $nodeToPort[dst])
-	nextHop[dst] = dst
-	cost[dst] = 1
-	neighbor[dst] = true
+	$nextHop[dst] = dst
+	$cost[dst] = 1
+	$neighbor[dst] = true
 
 	payload = [srcIp, $hostname].join(" ")
 
@@ -137,10 +88,10 @@ def edgebExt(cmd)
 	srcIp = cmd[0]
 	node = cmd[1]
 
-	nextHop[node] = node
-	cost[node] = 1
+	$nextHop[node] = node
+	$cost[node] = 1
 
-	neighbor[node] = true
+	$neighbor[node] = true
 	#createConnection()
 =begin
 	If we decide to duplex or when we learn more about ruby tcp
@@ -164,9 +115,14 @@ end
 # Close connections, empty buffers, kill threads
 def shutdown(cmd)
 	$cmdLin.kill
-	$execute.kill
+	#$execute.kill
 	$server.kill
-	
+	$processPax.kill
+
+	$serverConnections.each do |connection|
+		connection.kill
+	end
+
 	STDOUT.flush
 	STDERR.flush
 	
@@ -211,41 +167,7 @@ def circuit(cmd)
 	STDOUT.puts "CIRCUIT: not implemented"
 end
 
-
-
-
-# do main loop here.... 
-def main()
-	#puts "in main" #for debugging
-	#start the thread that reads the command line input
-	$cmdLin = Thread.new do
-		getCmdLin()
-	end
-	#start the thread that executes command
-	$execute = Thread.new do
-		exTermCmd()
-	end
-=begin THIS IS CURRENTLY BROKEN MAKES PROGRAM HANG EVEN AFTER SHUTDOWN CALL
-	#start the thread that will accept incoming connections and read
-	#their input
-	$server = Thread.new do
-		server = TCPServer.new($port)
-		loop do
-			Thread.start(server.accept) do |client|
-				#$inPorts << client
-				#assuming reading from a client will give
-				#full packet
-				$recvBuffer << client.gets
-			end
-		end
-	end
-=end
-	#make sure the program doesn't terminate prematurely
-	$cmdLin.join
-	$execute.join
-	$server.join
-
-end
+# --------------------- Threads --------------------- #
 
 def getCmdLin()
 	while(line = STDIN.gets())
@@ -264,6 +186,7 @@ def exTermCmd()
 			args = arr[1..-1]
 			case cmd
 			when "EDGEB"; edgeb(args)
+			when "EDGEBEXT"; edgebExt(args)
 			when "EDGED"; edged(args)
 			when "EDGEW"; edgew(args)
 			when "DUMPTABLE"; dumptable(args)
@@ -289,59 +212,49 @@ def exTermCmd()
 	end
 end
 
-def setup(hostname, port, nodes, config)
-#	puts "in setup"
-
-	$hostname = hostname
-	$port = port
-	$timer = Timer.new
-	parseConfig(config)
-	parseNodes(nodes)
-
-	# Initializes the hashes used for the routing tables
-	nextHop = Hash.new("-")
-	cost = Hash.new(1.0/0.0) #inf
-	cost[$hostname] = 0;
-
-	# Initializes the hashes used for neighbor checking and TCP object
-	#connections
-	neighbor = Hash.new
-	tcpH = Hash.new
-
-	# Initialized buffers
-	$intComBuf = []
-	$extComBuf = []
-	$packetBuf = []
-
-	# Unique ID used for each message. Incremented for every new message
-	$nextMsgId = 0
-
-	main()
-
-end
-
-# Reads the config file and stores its contents into respective variables
-def parseConfig(file)
-	File.foreach(file){ |line|
-		pieces = line.partition("=")
-		if pieces[0] == "updateInterval"
-			$updateInterval = pieces[2]
-		elsif pieces[0] == "maxPayload"
-			$maxPayload = pieces[2]
-		elsif pieces[0] == "pingTimeout"
-			$pingTimeout = pieces[2]
+def serverThread()
+	server = TCPServer.new($port)
+	loop do
+		serverConnection = Thread.start(server.accept) do |client|
+			puts "in server accept"
+			#assuming reading from a client will give
+			#full packet
+			$recvBuffer << client.gets
 		end
-	}
+
+		$serverConnections << serverConnection
+	end
 end
 
-# Reads the nodes file and stores its node => port into $nodes hash 
-def parseNodes(file)
-	File.foreach(file){ |line|
-		pieces = line.partition(",")
-		$nodeToPort[pieces[0]] = pieces[2].to_i
-	}
+def processPackets()
+	loop do
+		while (!recvBuffer.empty?)
+			packet = recvBuffer[0]
+			src = getHeaderVal(packet,"src")
+			id = getHeaderVal(packet, "id").to_i
+			offset = getHeaderVal(packet, "offset").to_i
+			$packetHash[src][id][offset] = packet
+		end
+
+		$packetHash.each {|srcHash|
+			srcHash.each {|idHash|
+				sum = 0
+				idHash.keys.sort.each {|k|
+					packet = idHash[k]
+					totLen = getHeaderVal(packet, "totLen").to_i
+					sum = sum + getHeaderVal(packet, "len").to_i
+				}
+
+				if totLen == sum
+					payload = reconstructPayload(idHash)
+					$cmdLinBuffer << payload
+				end
+			}
+		}
+	end
 end
 
+# --------------------- Outgoing Packets Functions --------------------- #
 =begin
 Send function for commands from this node's terminal NOT for commands from
 other nodes
@@ -351,7 +264,7 @@ packet to the next node
 def send(cmd, payload, dst)
 	fragments = payload.chars.to_a.each_slice($maxPayload).to_a.map{|s|
 			s.to_s}
-	packets = createPackets(cmd, fragments, dst)
+	packets = createPackets(cmd, fragments, dst, payload.length)
 
 	packets.each { |p|
 		tcpSend(p, $nextHop[dst])
@@ -360,11 +273,17 @@ end
 
 # Appends header to each fragment
 # ADD ALL OF THE HEADER INFO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-def createPackets(cmd, fragments, dst)
+def createPackets(cmd, fragments, dst, totLen)
 	packets = []
-
+	fragOffset = 0
 	fragments.each { |f|
 		src = $hostname
+		id = $nextMsgId
+		fragFlag = 0 # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
+		len = f.length
+		ttl = -1 # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
+		routingType = "packingSwitching" # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
+		path = "none"
 
 		header = ["src="+src, "dst="+dst, "id="+id, "cmd="+cmd, "fragFlag="+fragFlag, "fragOffset="+fragOffset,
 		"len="+len, "totLen="+totLen, "ttl="+ttl, "routingType="+routingType, "path="+path].join(",")
@@ -372,6 +291,8 @@ def createPackets(cmd, fragments, dst)
 		p = header + ":" + f
 
 		packets.push(p)
+
+		fragOffset = fragOffset + len
 	}
 
 	$nextMsgId = $nextMsgId + 1
@@ -408,37 +329,79 @@ def createConnection(cmd)
 #	TCPSocket
 end
 
-# regex: /name=([^,])
-
-def processPackets()
-	loop do
-		while (!recvBuffer.empty?)
-			packet = recvBuffer[0]
-			src = getHeaderVal(packet,"src")
-			id = getHeaderVal(packet, "id").to_i
-			offset = getHeaderVal(packet, "offset").to_i
-			packetHash[src][id][offset] = packet
+# ---------------- Helper Functions ----------------- #
+# Reads the config file and stores its contents into respective variables
+def parseConfig(file)
+	File.foreach(file){ |line|
+		pieces = line.partition("=")
+		if pieces[0] == "updateInterval"
+			$updateInterval = pieces[2]
+		elsif pieces[0] == "maxPayload"
+			$maxPayload = pieces[2]
+		elsif pieces[0] == "pingTimeout"
+			$pingTimeout = pieces[2]
 		end
+	}
+end
 
-		packetHash.each {|srcHash|
-			srcHash.each {|idHash|
-				sum = 0
-				idHash.keys.sort.each {|k|
-					packet = idHash[k]
-					totLen = getHeaderVal(packet, "totLen").to_i
-					sum = sum + getHeaderVal(packet, "len").to_i
-				}
-
-				if totLen == sum
-					payload = reconstructPayload(idHash)
-					$cmdLinBuffer << payload
-			}
-		}
-	end
+# Reads the nodes file and stores its node => port into $nodes hash 
+def parseNodes(file)
+	File.foreach(file){ |line|
+		pieces = line.partition(",")
+		$nodeToPort[pieces[0]] = pieces[2].to_i
+	}
 end
 
 def getHeaderVal(packet,key)
 	header = packet.splot(":")[0]
 	return header.scan(/#{key}=([^,])/).flatten[0]
 end
+
+
+# --------------------- Main/Setup ----------------- #
+def main()
+	#puts "in main" #for debugging
+	#start the thread that reads the command line input
+	$cmdLin = Thread.new do
+		getCmdLin()
+	end
+	#start the thread that executes command
+	$execute = Thread.new do
+		exTermCmd()
+	end
+
+	#start the thread that will accept incoming connections and read
+	#their input
+	$server = Thread.new do
+		serverThread()
+	end
+
+	$processPax = Thread.new do
+		processPackets()
+	end
+
+	#make sure the program doesn't terminate prematurely
+	$cmdLin.join
+	$execute.join
+	$server.join
+	$processPax.join
+
+end
+
+def setup(hostname, port, nodes, config)
+#	puts "in setup"
+
+	$hostname = hostname
+	$port = port
+	$timer = Timer.new
+	parseConfig(config)
+	parseNodes(nodes)
+
+	main()
+
+end
+
+
+
+
 setup(ARGV[0], ARGV[1], ARGV[2], ARGV[3])
