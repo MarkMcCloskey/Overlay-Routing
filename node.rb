@@ -1,6 +1,6 @@
 require 'thread'
 require 'socket'
-require 'csv'
+
 
 # Properties for this node
 $port = nil
@@ -37,7 +37,7 @@ $execute
 $server
 $processPax
 $serverConnections = Array.new # Array of INCOMING connection threads
-$mutex = Mutex.new
+
 class Timer
 	DELTA_T = ONE_SECOND = 1
 	attr_accessor :startTime, :curTime
@@ -106,18 +106,12 @@ def edgebExt(cmd)
 end
 
 def dumptable(fileName)
-	puts "in dumptable"
-	puts fileName
-	CSV.open(fileName, "w") { |csv|
-		puts "got csv"
+	CSV.open(fileName, "wb") { |csv|
 		$cost.each_key { |node|
-			puts "node"
 			csv << [$hostname, node, $nextHop[node],
 	   			$cost[node]]
 		}
-		puts "done with node"
 	}
-	puts "done with dumptable"
 
 end
 
@@ -125,8 +119,8 @@ end
 def shutdown(cmd)
 	$cmdLin.kill
 	#$execute.kill
-#	$server.kill
-#	$processPax.kill
+	#$server.kill
+	#$processPax.kill
 
 	$serverConnections.each do |connection|
 		connection.kill
@@ -179,12 +173,12 @@ end
 # --------------------- Threads --------------------- #
 
 def getCmdLin()
-$execute = nil
+	$execute = nil
 	while(line = STDIN.gets())
-
 		line = line.strip()
 		$cmdLinBuffer << line
-		if($execute == nil || !$execute.alive?)
+
+		if ($execute == nil || !$execute.alive?)
 			$execute = Thread.new do
 				exTermCmd()
 			end
@@ -193,7 +187,8 @@ $execute = nil
 end
 
 def exTermCmd()
-		while(!$cmdLinBuffer.empty?)
+	# loop do
+		while(!$cmdLinBuffer.empty?) # WAS IF STATEMENT
 			line = $cmdLinBuffer.delete_at(0)
 			arr = line.split(' ')
 			cmd = arr[0]
@@ -215,7 +210,7 @@ def exTermCmd()
 			when "updateInterval"; puts $updateInterval
 			when "maxPayload"; puts $maxPayload
 			when "pingTimeout"; puts $pingTimeout
-			when "nodeToPort";puts $nodeToPort
+			when "nodesToPort";puts $nodesToPort
 			when "curTime"; puts $timer.curTime
 			when "startTime"; puts $timer.startTime
 			when "runTime"; puts $timer.runTime
@@ -223,7 +218,8 @@ def exTermCmd()
 			else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 			end
 		end
-	end
+	#end
+end
 
 def serverThread()
 	server = TCPServer.new($port)
@@ -246,8 +242,7 @@ the socket
 					if sock.eof? then
 						sock.close
 					else
-						$recvBuffer << 
-						sock.recv($maxPayload)
+						$recvBuffer << sock.gets
 					end
 				end
 			end
@@ -356,9 +351,7 @@ end
 def tcpSend(packet, nextHop)
 
 	socket = $nodeToSocket[nextHop]
-	#possible make sure this sends the full msg by checking num bytes
-	#sent
-	socket.send(packet)
+	socket.puts(p)
 	
 end
 
@@ -399,26 +392,25 @@ def main()
 		getCmdLin()
 	end
 	#start the thread that executes command
-=begin
-	$execute = Thread.new do
-		exTermCmd()
-	end
+	# $execute = Thread.new do
+	# 	exTermCmd()
+	# end
 
 	#start the thread that will accept incoming connections and read
 	#their input
-	$server = Thread.new do
-		serverThread()
-	end
+	# $server = Thread.new do
+	# 	serverThread()
+	# end
 
-	$processPax = Thread.new do
-		processPackets()
-	end
-=end
+	# $processPax = Thread.new do
+	# 	processPackets()
+	# end
+
 	#make sure the program doesn't terminate prematurely
 	$cmdLin.join
-#	$execute.join
-#	$server.join
-#	$processPax.join
+	$execute.join
+	$server.join
+	$processPax.join
 
 end
 
