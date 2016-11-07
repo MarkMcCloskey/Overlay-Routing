@@ -37,7 +37,7 @@ $execute
 $server
 $processPax
 $serverConnections = Array.new # Array of INCOMING connection threads
-
+$mutex = Mutex.new
 class Timer
 	DELTA_T = ONE_SECOND = 1
 	attr_accessor :startTime, :curTime
@@ -106,7 +106,6 @@ def edgebExt(cmd)
 end
 
 def dumptable(fileName)
-=begin
 	puts "in dumptable"
 	puts fileName
 	CSV.open(fileName, "w") { |csv|
@@ -119,20 +118,6 @@ def dumptable(fileName)
 		puts "done with node"
 	}
 	puts "done with dumptable"
-=end
-puts "in dumptable"
-	puts fileName
-	CSV.open(fileName, "w") do  |csv|
-		puts "got csv"
-		$cost.each_key do |node|
-			puts "node"
-			csv << [$hostname, node, $nextHop[node],
-	   			$cost[node]]
-	end
-		puts "done with node"
-end
-	puts "done with dumptable"
-
 
 end
 
@@ -140,8 +125,8 @@ end
 def shutdown(cmd)
 	$cmdLin.kill
 	#$execute.kill
-	$server.kill
-	$processPax.kill
+#	$server.kill
+#	$processPax.kill
 
 	$serverConnections.each do |connection|
 		connection.kill
@@ -194,16 +179,21 @@ end
 # --------------------- Threads --------------------- #
 
 def getCmdLin()
+$execute = nil
 	while(line = STDIN.gets())
 
 		line = line.strip()
 		$cmdLinBuffer << line
+		if($execute == nil || !$execute.alive?)
+			$execute = Thread.new do
+				exTermCmd()
+			end
+		end
 	end
 end
 
 def exTermCmd()
-	loop do
-		if(!$cmdLinBuffer.empty?)
+		while(!$cmdLinBuffer.empty?)
 			line = $cmdLinBuffer.delete_at(0)
 			arr = line.split(' ')
 			cmd = arr[0]
@@ -234,7 +224,6 @@ def exTermCmd()
 			end
 		end
 	end
-end
 
 def serverThread()
 	server = TCPServer.new($port)
@@ -406,11 +395,11 @@ end
 def main()
 	#puts "in main" #for debugging
 	#start the thread that reads the command line input
-
 	$cmdLin = Thread.new do
 		getCmdLin()
 	end
 	#start the thread that executes command
+=begin
 	$execute = Thread.new do
 		exTermCmd()
 	end
@@ -424,12 +413,12 @@ def main()
 	$processPax = Thread.new do
 		processPackets()
 	end
-
+=end
 	#make sure the program doesn't terminate prematurely
 	$cmdLin.join
-	$execute.join
-	$server.join
-	$processPax.join
+#	$execute.join
+#	$server.join
+#	$processPax.join
 
 end
 
