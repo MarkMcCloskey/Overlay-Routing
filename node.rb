@@ -1,6 +1,6 @@
 require 'thread'
 require 'socket'
-
+require 'csv'
 
 # Properties for this node
 $port = nil
@@ -106,12 +106,33 @@ def edgebExt(cmd)
 end
 
 def dumptable(fileName)
-	CSV.open(fileName, "wb") { |csv|
+=begin
+	puts "in dumptable"
+	puts fileName
+	CSV.open(fileName, "w") { |csv|
+		puts "got csv"
 		$cost.each_key { |node|
+			puts "node"
 			csv << [$hostname, node, $nextHop[node],
 	   			$cost[node]]
 		}
+		puts "done with node"
 	}
+	puts "done with dumptable"
+=end
+puts "in dumptable"
+	puts fileName
+	CSV.open(fileName, "w") do  |csv|
+		puts "got csv"
+		$cost.each_key do |node|
+			puts "node"
+			csv << [$hostname, node, $nextHop[node],
+	   			$cost[node]]
+	end
+		puts "done with node"
+end
+	puts "done with dumptable"
+
 
 end
 
@@ -204,7 +225,7 @@ def exTermCmd()
 			when "updateInterval"; puts $updateInterval
 			when "maxPayload"; puts $maxPayload
 			when "pingTimeout"; puts $pingTimeout
-			when "nodesToPort";puts $nodesToPort
+			when "nodeToPort";puts $nodeToPort
 			when "curTime"; puts $timer.curTime
 			when "startTime"; puts $timer.startTime
 			when "runTime"; puts $timer.runTime
@@ -236,7 +257,8 @@ the socket
 					if sock.eof? then
 						sock.close
 					else
-						$recvBuffer << sock.gets
+						$recvBuffer << 
+						sock.recv($maxPayload)
 					end
 				end
 			end
@@ -345,7 +367,9 @@ end
 def tcpSend(packet, nextHop)
 
 	socket = $nodeToSocket[nextHop]
-	socket.puts(p)
+	#possible make sure this sends the full msg by checking num bytes
+	#sent
+	socket.send(packet)
 	
 end
 
@@ -382,6 +406,7 @@ end
 def main()
 	#puts "in main" #for debugging
 	#start the thread that reads the command line input
+
 	$cmdLin = Thread.new do
 		getCmdLin()
 	end
