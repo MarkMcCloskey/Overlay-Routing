@@ -75,6 +75,9 @@ def edgeb(cmd)
 		STDOUT.puts "Edge Already Exists"
 		return
 	end
+
+	#create a connection with the new neighbor and save the 
+	#socket in the hash
 	$nodeToSocket[dst] = TCPSocket.open(dstIp, $nodeToPort[dst])
 
 	$nextHop[dst] = dst
@@ -95,13 +98,10 @@ def edgebExt(cmd)
 	$cost[node] = 1
 
 	$neighbor[node] = true
-	#createConnection()
-=begin
-	If we decide to duplex or when we learn more about ruby tcp
-	connections,
-	then write the code for it here
-=end
 
+	#open a connection between this node and the new neighbor
+	#and save the socket in the hash
+	$nodeToSocket[node] = TCPSocket.open(srcIp, $nodeToPort[node])
 
 end
 
@@ -219,13 +219,38 @@ def serverThread()
 	server = TCPServer.new($port)
 	loop do
 		serverConnection = Thread.start(server.accept) do |client|
-			puts "in server accept"
+			#puts "in server accept"
 			#assuming reading from a client will give
 			#full packet
-			$recvBuffer << client.gets
+=begin
+This is an infinite loop that will hang on select waiting for data from
+the socket connection. If an even occurs it will check to see if the client
+has disconnected, and if so close that socket. Otherwise it will read from
+the socket
+=end
+			
+			while 1
+				incomingData = select(client, nil, nil)	
+			
+				for sock in incomingData[0]
+					if sock.eof? then
+						sock.close
+					else
+						$recvBuffer << sock.gets
+					end
+				end
+			end
+			
 		end
-
-		$serverConnections << serverConnection
+=begin
+This is for another idea where we keep all socket connections in one place
+and then use select on all of them only reading from that ones that have
+incoming data
+$serverConnections << serverConnection
+here's a good example
+://www6.software.ibm.com/developerworks/education/l-rubysocks/l-rubysocks
+-a4.pdf
+=end
 	end
 end
 
@@ -319,20 +344,9 @@ end
 # Function that actually calls the TCP function to send message
 def tcpSend(packet, nextHop)
 
-	#tcp = $tcpH[nextHop]$cmdLinBuffer << line
-	tcp = $nodeToPort[nextHop]
-	tcp.puts(p)
-	# Code for actually sending the packet to the next node here. 
-	# (If there is a tcp error, ignore it and let the timeout handle it)
-
-
-end
-=begin
-	createConnection will take an array where the first element is
-	the 
-=end
-def createConnection(cmd)
-#	TCPSocket
+	socket = $nodeToSocket[nextHop]
+	socket.puts(p)
+	
 end
 
 # ---------------- Helper Functions ----------------- #
