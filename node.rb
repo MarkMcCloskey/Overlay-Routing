@@ -1,7 +1,7 @@
 require 'thread'
 require 'socket'
 require 'csv'
-
+Thread::abort_on_exception = true
 # Properties for this node
 $port = nil
 $hostname = nil
@@ -17,11 +17,11 @@ $packetSize = 100000
 # 		unreachable nodes
 $nextHop = Hash.new # nodeName => nodeName
 $cost = Hash.new # nodeName => integer cost
-
+$TCPserver 
 # TCP hashes
 $nodeToPort = Hash.new # Contains the port numbers of every node in our universe
 $nodeToSocket = Hash.new # Outgoing sockets to other nodes
-
+$startReading = false
 # Timer Object
 $timer
 
@@ -123,7 +123,7 @@ def shutdown(cmd)
 	#$cmdLin.kill
 	#$server.kill
 	#$processPax.kill
-
+	$nodeToSocket.each_value do |val| val.shutdown end
 	$serverConnections.each do |connection|
 		connection.kill
 	end
@@ -175,6 +175,8 @@ end
 # --------------------- Threads --------------------- #
 
 def getCmdLin()
+	while(!$startReading)
+	end
 	while(line = STDIN.gets())
 		if $cmdExt != nil 
 			$cmdExt.join
@@ -212,7 +214,7 @@ def getCmdLin()
 end
 
 def getCmdExt() 
-	while($extCmdBuffer.empty?)
+	while(!$extCmdBuffer.empty?)
 		line = $extCmdBuffer.delete_at(0)
 		line = line.strip()
 
@@ -229,36 +231,46 @@ end
 
 def serverThread()
 	#start a server on this nodes port
-	server = TCPServer.new($port)
-	
-
-	loop do
+	puts "in serverThread"
+	#server = TCPServer.new($port)
+	#puts "Server: " + server.to_s
+		loop do
 		#wait for a client to connect and when it does spawn
 		#another thread to handle it
-		serverConnection = Thread.start(server.accept) do |client|
-			#add the socket to a global list of incoming socks
-			$serverConnections << serverConnection
+		$startReading = true
 
+			serverConnection = Thread.start($TCPserver.accept) do |client|
+			#add the socket to a global list of incoming socks
+			puts "client connected" + client.to_s
+			puts serverConnection
+			$serverConnections << serverConnection
+			
 
 			loop do
 				#wait for a connection to have data
+				puts "waiting for data"
 				incomingData = select( [client] , nil, nil)	
+				puts "receiving data"
+				puts incomingData[0]
+
 				#loop through the incoming sockets that
 				#have data
 				for sock in incomingData[0]
-
 					#if the connection is over
 					if sock.eof? then
 						#close it
 						sock.close
+						$serverConnections.delete(sock)
 						#possibly delete information
 						#from global variables
 
 					else
 						#read what the connection
-						#has
-
-						$recvBuffer << sock.recvfrom($packetSize)
+                                                #has
+					puts "putting data in buffer"
+					$recvBuffer << sock.gets
+					#$recvBuffer << sock.recv($packetSize)
+					puts "data should be in the buff"
 					puts $recvBuffer[-1]
 					end
 				end
@@ -306,8 +318,8 @@ end
 
 def processPackets()
 	loop do
-		while (!recvBuffer.empty?)
-			packet = recvBuffer[0]
+		while (!$recvBuffer.empty?)
+			packet = $recvBuffer[0]
 			src = getHeaderVal(packet,"src")
 			id = getHeaderVal(packet, "id").to_i
 			offset = getHeaderVal(packet, "offset").to_i
@@ -347,7 +359,7 @@ end
 =end
 def send(cmd, payload, dst)
 	fragments = payload.chars.to_a.each_slice($maxPayload).to_a.map{|s|
-		s.to_s}
+		s.to_s} #.to_s
 
 	packets = createPackets(cmd, fragments, dst, payload.length)
 
@@ -371,8 +383,8 @@ def createPackets(cmd, fragments, dst, totLen)
 		path = "none"
 
 
-		header = ["src="+src, "dst="+dst, "id="+id, "cmd="+cmd, "fragFlag="+fragFlag, "fragOffset="+fragOffset,
-	    "len="+len, "totLen="+totLen, "ttl="+ttl, "routingType="+routingType, "path="+path].join(",")
+		header = ["src="+src, "dst="+dst, "id="+id.to_s, "cmd="+cmd, "fragFlag="+fragFlag.to_s, "fragOffset="+fragOffset.to_s,
+	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+ttl.to_s, "routingType="+routingType, "path="+path].join(",")
 
 		p = header + ":" + f
 
@@ -400,8 +412,10 @@ end
 def tcpSend(packet, nextHop)
 
 	socket = $nodeToSocket[nextHop]
+	puts "trying to send"
+	puts socket
 	socket.send(packet, packet.size)
-
+	puts "sent"
 end
 
 # ---------------- Helper Functions ----------------- #
@@ -410,11 +424,11 @@ def parseConfig(file)
 	File.foreach(file){ |line|
 		pieces = line.partition("=")
 		if pieces[0] == "updateInterval"
-			$updateInterval = pieces[2]
+			$updateInterval = pieces[2].to_i
 		elsif pieces[0] == "maxPayload"
-			$maxPayload = pieces[2]
+			$maxPayload = pieces[2].to_i
 		elsif pieces[0] == "pingTimeout"
-			$pingTimeout = pieces[2]
+			$pingTimeout = pieces[2].to_i
 		end
 	}
 end
@@ -435,17 +449,19 @@ end
 
 # --------------------- Main/Setup ----------------- #
 def main()
+	#start the thread that will accept incoming connections and read
+	# their input
+	$server = Thread.new do
+		serverThread()
+	end
+
+	
 	#puts "in main" #for debugging
 	#start the thread that reads the command line input
 	$cmdLin = Thread.new do
 		getCmdLin()
 	end
 
-	#start the thread that will accept incoming connections and read
-	# their input
-	$server = Thread.new do
-		serverThread()
-	end
 
 	$processPax = Thread.new do
 		processPackets()
@@ -463,6 +479,7 @@ def setup(hostname, port, nodes, config)
 
 	$hostname = hostname
 	$port = port
+	$TCPserver = TCPServer.new($port)
 	$timer = Timer.new
 	parseConfig(config)
 	parseNodes(nodes)
