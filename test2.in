@@ -1,0 +1,7 @@
+NODE n1 port
+NODE n1 hostname
+NODE n1 updateInterval
+NODE n1 maxPayload
+NODE n1 pingTimeout
+CONTROLLER SLEEP 1
+CONTROLLER SHUTDOWN

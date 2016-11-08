@@ -1,0 +1,3 @@
+ruby node.rb n1 5000 nodes.txt config
+DUMPTABLE table.txt
+SHUTDOWN
