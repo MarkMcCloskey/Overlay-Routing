@@ -96,7 +96,6 @@ while(line = fHandle.gets())
 		
 end
 
-
 while(line = STDIN.gets())
 	parse_command(line.strip.split(' '))
 end

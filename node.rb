@@ -21,7 +21,7 @@ $TCPserver
 # TCP hashes
 $nodeToPort = Hash.new # Contains the port numbers of every node in our universe
 $nodeToSocket = Hash.new # Outgoing sockets to other nodes
-$startReading = false
+#$startReading = false
 # Timer Object
 $timer
 
@@ -86,12 +86,14 @@ def edgeb(cmd)
 	$cost[dst] = 1
 	$neighbor[dst] = true
 
-	payload = [srcIp, $hostname].join(" ")
+	payload = ["EDGEBEXT",srcIp, $hostname].join(" ")
 
-	send("EDBEBEXT", payload, dst)
+	send("EDGEBEXT", payload, dst)
 end
 
 def edgebExt(cmd)
+	puts "edgebExt called"
+	puts cmd
 	srcIp = cmd[0]
 	node = cmd[1]
 
@@ -103,8 +105,9 @@ def edgebExt(cmd)
 
 	#open a connection between this node and the new neighbor
 	#and save the socket in the hash
+	puts "edgebext about to open connection"
 	$nodeToSocket[node] = TCPSocket.open(srcIp, $nodeToPort[node])
-
+	puts "edgebext opened connection"
 end
 
 def dumptable(args)
@@ -175,9 +178,8 @@ end
 # --------------------- Threads --------------------- #
 
 def getCmdLin()
-	while(!$startReading)
-	end
 	while(line = STDIN.gets())
+		sleep 0.1 while $server.status != 'sleep'
 		if $cmdExt != nil 
 			$cmdExt.join
 		end
@@ -213,8 +215,10 @@ def getCmdLin()
 	end
 end
 
-def getCmdExt() 
+def getCmdExt()
 	while(!$extCmdBuffer.empty?)
+		puts "inside getCmdExt"
+
 		line = $extCmdBuffer.delete_at(0)
 		line = line.strip()
 
@@ -224,7 +228,7 @@ def getCmdExt()
 
 		case cmd
 		when "EDGEBEXT"; edgebExt(args)
-		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
+		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
 	end
 end
@@ -234,17 +238,16 @@ def serverThread()
 	puts "in serverThread"
 	#server = TCPServer.new($port)
 	#puts "Server: " + server.to_s
-		loop do
+	loop do
 		#wait for a client to connect and when it does spawn
 		#another thread to handle it
-		$startReading = true
 
-			serverConnection = Thread.start($TCPserver.accept) do |client|
+		serverConnection = Thread.start($TCPserver.accept) do |client|
 			#add the socket to a global list of incoming socks
 			puts "client connected" + client.to_s
 			puts serverConnection
 			$serverConnections << serverConnection
-			
+
 
 			loop do
 				#wait for a connection to have data
@@ -260,18 +263,19 @@ def serverThread()
 					if sock.eof? then
 						#close it
 						sock.close
-						$serverConnections.delete(sock)
+						serverConnection.kill
+						$serverConnections.delete(serverConnection)
 						#possibly delete information
 						#from global variables
 
 					else
 						#read what the connection
-                                                #has
-					puts "putting data in buffer"
-					$recvBuffer << sock.gets
-					#$recvBuffer << sock.recv($packetSize)
-					puts "data should be in the buff"
-					puts $recvBuffer[-1]
+						#has
+						puts "putting data in buffer"
+						$recvBuffer << sock.gets
+						#$recvBuffer << sock.recv($packetSize)
+						puts "data should be in the buff"
+						puts $recvBuffer[-1]
 					end
 				end
 			end
@@ -317,37 +321,70 @@ def serverThread()
 end
 
 def processPackets()
+	totLen = nil
+	checkPackets = false
 	loop do
 		while (!$recvBuffer.empty?)
-			packet = $recvBuffer[0]
+			checkPackets = true
+			puts "data in recv buffer"
+			packet = $recvBuffer.delete_at(0)
 			src = getHeaderVal(packet,"src")
 			id = getHeaderVal(packet, "id").to_i
 			offset = getHeaderVal(packet, "offset").to_i
 			$packetHash[src][id][offset] = packet
+			puts "Src: "+ src 
+			puts "Id: " + id.to_s
+			puts "Offset: " + offset.to_s
+			puts "totLen: " + getHeaderVal(packet, "totLen") 
 		end
+		if checkPackets
+			$packetHash.each {|srcKey,srcHash|
+				srcHash.each {|idKey, idHash|
+					sum = 0
+					idHash.keys.sort.each {|k|
+						puts"inside id hash"
+						packet = idHash[k]
+						totLen = getHeaderVal(packet, "totLen").to_i
+						sum = sum + getHeaderVal(packet, "len").to_i
+					}
 
-		$packetHash.each {|srcKey,srcHash|
-			srcHash.each {|idKey, idHash|
-				sum = 0
-				idHash.keys.sort.each {|k|
-					packet = idHash[k]
-					totLen = getHeaderVal(packet, "totLen").to_i
-					sum = sum + getHeaderVal(packet, "len").to_i
+					if totLen!= nil && totLen == sum
+						puts "totLen"
+						msg = reconstructMsg(idHash)
+						$extCmdBuffer << msg
+						$packetHash[srcKey].delete(idKey)
+
+					end
 				}
-
-				if totLen == sum
-					payload = reconstructPayload(idHash)
-					$extCmdBuffer << payload
-					packetHash[srcKey].delete(idKey)
-				end
 			}
-		}
+			checkPackets = false
+		end
 
 		$cmdExt = Thread.new do
 			getCmdExt()
 		end
 		$cmdExt.join
 	end
+end
+
+=begin
+reconstructMsg will take a hashtable that contains offset -> packet
+it will go through every packet extracting the payload and it will combine
+them into a single message, returning that message
+=end
+def reconstructMsg(packetHash)
+	msg = ""
+
+=begin
+the Hash contains one single message. The key is the offset value of that 
+packet. Sort puts them in order of offset and then reassembles all the 
+packets
+=end
+	packetHash.keys.sort.each { |offset,val| 
+		msg += packetHash[offset].split(":")[1]
+	}
+
+	return msg
 end
 
 # --------------------- Outgoing Packets Functions --------------------- #
@@ -357,11 +394,11 @@ end
 	Fragments the payload, adds the IP header to each packet, and sends each
 	packet to the next node
 =end
-def send(cmd, payload, dst)
-	fragments = payload.chars.to_a.each_slice($maxPayload).to_a.map{|s|
-		s.to_s} #.to_s
+def send(cmd, msg, dst)
+	fragments = msg.chars.to_a.each_slice($maxPayload).to_a.map{|s|
+		s.join("")} #.to_s
 
-	packets = createPackets(cmd, fragments, dst, payload.length)
+	packets = createPackets(cmd, fragments, dst, msg.length)
 
 	packets.each { |p|
 		tcpSend(p, $nextHop[dst])
@@ -414,7 +451,8 @@ def tcpSend(packet, nextHop)
 	socket = $nodeToSocket[nextHop]
 	puts "trying to send"
 	puts socket
-	socket.send(packet, packet.size)
+	socket.puts(packet)
+	#socket.send(packet, packet.size)
 	puts "sent"
 end
 
@@ -442,8 +480,8 @@ def parseNodes(file)
 end
 
 def getHeaderVal(packet,key)
-	header = packet.splot(":")[0]
-	return header.scan(/#{key}=([^,])/).flatten[0]
+	header = packet.split(":")[0]
+	return header.scan(/#{key}=([^,]*)/).flatten[0]
 end
 
 
@@ -455,7 +493,7 @@ def main()
 		serverThread()
 	end
 
-	
+
 	#puts "in main" #for debugging
 	#start the thread that reads the command line input
 	$cmdLin = Thread.new do
@@ -478,7 +516,7 @@ def setup(hostname, port, nodes, config)
 	#	puts "in setup"
 
 	$hostname = hostname
-	$port = port
+	$port = port.to_i
 	$TCPserver = TCPServer.new($port)
 	$timer = Timer.new
 	parseConfig(config)
