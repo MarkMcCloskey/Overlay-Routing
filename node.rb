@@ -100,7 +100,6 @@ end
 # establishes a connection with that node
 # Argument Format: <srcIp, nodeName>
 def edgebExt(cmd)
-	puts cmd
 	srcIp = cmd[0]
 	node = cmd[1]
 
@@ -510,15 +509,13 @@ end
 
 # Starts the three main threads
 def main()
-	#start the thread that will accept incoming connections and read
+	# start the thread that will accept incoming connections and read
 	# their input
 	$server = Thread.new do
 		serverThread()
 	end
 
-
-	#puts "in main" #for debugging
-	#start the thread that reads the command line input
+	# start the thread that reads the command line input
 	$cmdLin = Thread.new do
 		getCmdLin()
 	end
@@ -528,7 +525,7 @@ def main()
 		processPackets()
 	end
 
-	#make sure the program doesn't terminate prematurely
+	# make sure the program doesn't terminate prematurely
 	$cmdLin.join
 	$server.join
 	$processPax.join
@@ -536,8 +533,6 @@ def main()
 end
 
 def setup(hostname, port, nodes, config)
-	#	puts "in setup"
-
 	$hostname = hostname
 	$port = port.to_i
 	$TCPserver = TCPServer.new($port)
