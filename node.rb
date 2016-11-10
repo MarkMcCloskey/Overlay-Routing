@@ -102,7 +102,6 @@ end
 def edgebExt(cmd)
 	srcIp = cmd[0]
 	node = cmd[1]
-
 	$nextHop[node] = node
 	$cost[node] = 1
 
