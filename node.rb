@@ -84,7 +84,7 @@ def edgeb(cmd)
 
 	#create a connection with the new neighbor and save the 
 	#socket in the hash
-	
+	sleep(1)
 	$nodeToSocket[dst] = TCPSocket.open(dstIp, $nodeToPort[dst])
 	
 	$nextHop[dst] = dst
@@ -132,7 +132,17 @@ def shutdown(cmd)
 	$processPax.kill
 
 	# Might do a double shutdown if the other end already shutdown the connection. Do we need to fix this?
-	$nodeToSocket.each_value do |socket| socket.shutdown end
+	$nodeToSocket.each_value do |socket| 
+		begin
+			if !socket.shutdown? then 
+				socket.shutdown 
+			end
+		rescue
+			1+1
+		ensure
+			1+1
+		end 
+	end
 
 	# Kills all serrver connection threads
 	$serverConnections.each do |connection|
@@ -266,7 +276,7 @@ def serverThread()
 		serverConnection = Thread.start($TCPserver.accept) do |client|
 			#add the socket to a global list of incoming socks
 			$serverConnections << serverConnection
-			clientThread(client)
+			clientThread(client, serverConnection)
 		end
 	end
 =begin
@@ -281,7 +291,7 @@ def serverThread()
 end
 
 # Listens for incoming packets from client nodes
-def clientThread(client)
+def clientThread(client, serverConnection)
 	loop do
 		#wait for a connection to have data
 		incomingData = select( [client] , nil, nil)
