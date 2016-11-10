@@ -2,6 +2,7 @@ require 'thread'
 require 'socket'
 require 'csv'
 Thread::abort_on_exception = true
+
 # Properties for this node
 $port = nil
 $hostname = nil
@@ -12,16 +13,18 @@ $neighbor = Hash.new # Boolean hash. Returns true if a the key node is a neighbo
 $timeout = 100000000000000000000000000
 $nextMsgId = 0 # ID used for each unique message created in THIS node
 $packetSize = 100000
+$TCPserver
+
 # Routing Table hashes
 # NOTE: Does not contain data for currently 
 # 		unreachable nodes
 $nextHop = Hash.new # nodeName => nodeName
-$cost = Hash.new # nodeName => integer cost
-$TCPserver 
+$cost = Hash.new # nodeName => integer cost 
+
 # TCP hashes
 $nodeToPort = Hash.new # Contains the port numbers of every node in our universe
 $nodeToSocket = Hash.new # Outgoing sockets to other nodes
-#$startReading = false
+
 # Timer Object
 $timer
 
@@ -66,10 +69,13 @@ end
 
 
 # --------------------- Part 0 --------------------- # 
+# Updates routing table, connections to the node, and send this node's information to 
+# the other node so it could also establish a connection
 def edgeb(cmd)
 	srcIp = cmd[0]
 	dstIp = cmd[1]
 	dst = cmd[2]
+
 	#is this a good idea?
 	if ($neighbor[dst])
 		STDOUT.puts "Edge Already Exists"
@@ -78,10 +84,9 @@ def edgeb(cmd)
 
 	#create a connection with the new neighbor and save the 
 	#socket in the hash
-	puts "trying to connect"
+	
 	$nodeToSocket[dst] = TCPSocket.open(dstIp, $nodeToPort[dst])
-	puts "tcp connected"
-	puts $nodeToSocket[dst]
+	
 	$nextHop[dst] = dst
 	$cost[dst] = 1
 	$neighbor[dst] = true
@@ -91,12 +96,13 @@ def edgeb(cmd)
 	send("EDGEBEXT", payload, dst)
 end
 
+# Recieves the external node information, updates the routing table,
+# establishes a connection with that node
+# Argument Format: <srcIp, nodeName>
 def edgebExt(cmd)
-	puts "edgebExt called"
 	puts cmd
 	srcIp = cmd[0]
 	node = cmd[1]
-
 
 	$nextHop[node] = node
 	$cost[node] = 1
@@ -105,11 +111,11 @@ def edgebExt(cmd)
 
 	#open a connection between this node and the new neighbor
 	#and save the socket in the hash
-	puts "edgebext about to open connection"
 	$nodeToSocket[node] = TCPSocket.open(srcIp, $nodeToPort[node])
-	puts "edgebext opened connection"
 end
 
+# Dumps the routing table information into a CSV formatted file. 
+# Row format: <srcNode, dstNode, nextHopNode, cost> 
 def dumptable(args)
 	fileName = args[0]
 	CSV.open(fileName, "wb") { |csv|
@@ -123,10 +129,13 @@ end
 
 # Close connections, empty buffers, kill threads
 def shutdown(cmd)
-	#$cmdLin.kill
-	#$server.kill
-	#$processPax.kill
-	$nodeToSocket.each_value do |val| val.shutdown end
+	$server.kill # This is killing the server thread without gracefully kill the server first. Do we need to fix this?
+	$processPax.kill
+
+	# Might do a double shutdown if the other end already shutdown the connection. Do we need to fix this?
+	$nodeToSocket.each_value do |socket| socket.shutdown end
+
+	# Kills all serrver connection threads
 	$serverConnections.each do |connection|
 		connection.kill
 	end
@@ -177,9 +186,20 @@ end
 
 # --------------------- Threads --------------------- #
 
+# Command Line Input Thread
+# Reads commands from the input and executes their
+# respective functions
 def getCmdLin()
 	while(line = STDIN.gets())
+		# Sleeps while the server thread is executing commands
+		# This is done so the server can finish establishing an
+		# incoming node connection before a command that requires
+		# a connection with that node is executed.
 		sleep 0.1 while $server.status != 'sleep'
+
+		# Wait until an external command execution finishes before
+		# executing a command line function. This avoids having
+		# race conditions with the global variable properties
 		if $cmdExt != nil 
 			$cmdExt.join
 		end
@@ -215,9 +235,12 @@ def getCmdLin()
 	end
 end
 
+# External Command Execution thread.
+# Executes commands querried by other nodes
 def getCmdExt()
+	# All commands are sent to a command buffer and this thread
+	# executes every command in the buffer
 	while(!$extCmdBuffer.empty?)
-		puts "inside getCmdExt"
 
 		line = $extCmdBuffer.delete_at(0)
 		line = line.strip()
@@ -233,82 +256,20 @@ def getCmdExt()
 	end
 end
 
+# Waits for incomming connection and starts a client thread for each
+# connection that listens for packets
 def serverThread()
-	#start a server on this nodes port
-	puts "in serverThread"
-	#server = TCPServer.new($port)
-	#puts "Server: " + server.to_s
+
 	loop do
 		#wait for a client to connect and when it does spawn
 		#another thread to handle it
 
 		serverConnection = Thread.start($TCPserver.accept) do |client|
 			#add the socket to a global list of incoming socks
-			puts "client connected" + client.to_s
-			puts serverConnection
 			$serverConnections << serverConnection
-
-
-			loop do
-				#wait for a connection to have data
-				puts "waiting for data"
-				incomingData = select( [client] , nil, nil)	
-				puts "receiving data"
-				puts incomingData[0]
-
-				#loop through the incoming sockets that
-				#have data
-				for sock in incomingData[0]
-					#if the connection is over
-					if sock.eof? then
-						#close it
-						sock.close
-						serverConnection.kill
-						$serverConnections.delete(serverConnection)
-						#possibly delete information
-						#from global variables
-
-					else
-						#read what the connection
-						#has
-						puts "putting data in buffer"
-						$recvBuffer << sock.gets
-						#$recvBuffer << sock.recv($packetSize)
-						puts "data should be in the buff"
-						puts $recvBuffer[-1]
-					end
-				end
-			end
-
+			clientThread(client)
 		end
 	end
-
-
-
-
-	#puts "in server accept"
-	#assuming reading from a client will give
-	#full packet
-=begin
-	This is an infinite loop that will hang on select waiting for data from
-	the socket connection. If an even occurs it will check to see if the client
-	has disconnected, and if so close that socket. Otherwise it will read from
-	the socket
-=end
-=begin
-			while 1
-				incomingData = select(client, nil, nil)	
-
-				for sock in incomingData[0]
-					if sock.eof? then
-						sock.close
-					else
-						$recvBuffer << sock.gets
-					end
-				end
-			end
-
-		end
 =begin
 	This is for another idea where we keep all socket connections in one place
 	and then use select on all of them only reading from that ones that have
@@ -320,49 +281,101 @@ def serverThread()
 =end
 end
 
+# Listens for incoming packets from client nodes
+def clientThread(client)
+	loop do
+		#wait for a connection to have data
+		incomingData = select( [client] , nil, nil)
+
+		#loop through the incoming sockets that
+		#have data
+		for sock in incomingData[0]
+			#if the connection is over
+			if sock.eof? then
+				#close it
+				sock.close
+				$serverConnections.delete(serverConnection)
+			
+				#possibly delete information
+				#from global variables
+
+				serverConnection.kill # This kills this thread. 
+				# Might be better to just return
+			else
+				#read what the connection
+				#has and inputs it into a
+				# packet buffer
+				$recvBuffer << sock.gets
+			end
+		end
+	end
+end
+
+# Process packets stored in the packer buffer
+# Stores those packets into a nice triple hash that
+# organized the packets by srcNode, messageId, and
+# byte offset
 def processPackets()
 	totLen = nil
+	# Flag used to check if packets have been added
+	# into the triple hash
 	checkPackets = false
+
 	loop do
+		# Empties the packet buffer and inserts them
+		# into the hash
 		while (!$recvBuffer.empty?)
 			checkPackets = true
-			puts "data in recv buffer"
+
 			packet = $recvBuffer.delete_at(0)
+
 			src = getHeaderVal(packet,"src")
 			id = getHeaderVal(packet, "id").to_i
 			offset = getHeaderVal(packet, "offset").to_i
+
 			$packetHash[src][id][offset] = packet
-			puts "Src: "+ src 
-			puts "Id: " + id.to_s
-			puts "Offset: " + offset.to_s
-			puts "totLen: " + getHeaderVal(packet, "totLen") 
 		end
+
+		# Reads through every message hash and checks if
+		# all packets have been received for that message.
+		# If so, reconstructs the message, and pushes it
+		# to the external command buffer
 		if checkPackets
+			# For each sourceNode hash
 			$packetHash.each {|srcKey,srcHash|
+				# For each message hash
 				srcHash.each {|idKey, idHash|
+					# Sum used to add each packets length
+					# and verify if all packets have been
+					# received by comparing the sum to
+					# the total length of the message
 					sum = 0
+					totLen = nil
+					# For each packet in offset order
 					idHash.keys.sort.each {|k|
-						puts"inside id hash"
 						packet = idHash[k]
 						totLen = getHeaderVal(packet, "totLen").to_i
 						sum = sum + getHeaderVal(packet, "len").to_i
 					}
 
-					if totLen!= nil && totLen == sum
-						puts "totLen"
+					if totLen != nil && totLen == sum
 						msg = reconstructMsg(idHash)
 						$extCmdBuffer << msg
 						$packetHash[srcKey].delete(idKey)
-
 					end
 				}
 			}
 			checkPackets = false
 		end
 
+		# Exececute the new external commands
 		$cmdExt = Thread.new do
 			getCmdExt()
 		end
+		# The reason why I make a thread and wait for it here
+		# is because that new thread can cause a race condition
+		# for other threads and those other threads use the
+		# global variable $cmdExt
 		$cmdExt.join
 	end
 end
@@ -380,7 +393,7 @@ the Hash contains one single message. The key is the offset value of that
 packet. Sort puts them in order of offset and then reassembles all the 
 packets
 =end
-	packetHash.keys.sort.each { |offset,val| 
+	packetHash.keys.sort.each { |offset| 
 		msg += packetHash[offset].split(":")[1]
 	}
 
@@ -395,18 +408,25 @@ end
 	packet to the next node
 =end
 def send(cmd, msg, dst)
+	# Divides the msg into fragments of at most maxPayLoad size
 	fragments = msg.chars.to_a.each_slice($maxPayload).to_a.map{|s|
 		s.join("")} #.to_s
 
+	# From the fragments, it creates packets by adding headers
+	# to each fragment
 	packets = createPackets(cmd, fragments, dst, msg.length)
 
+	# Send each packet to the next hop on its route to the
+	# destination
 	packets.each { |p|
 		tcpSend(p, $nextHop[dst])
 	}
 end
 
 # Appends header to each fragment
-# ADD ALL OF THE HEADER INFO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Packet format: src=<src>,dst=<dst>,id=<id>,cmd=<cmd>,fragFlag=<fragFlag>,
+# fragOffset=<fragOffset>,len=<len>,totLen=<totLen>,ttl=<ttl>,
+# routingType=<routingType>,path=<path>
 def createPackets(cmd, fragments, dst, totLen)
 	packets = []
 	fragOffset = 0
@@ -417,14 +437,16 @@ def createPackets(cmd, fragments, dst, totLen)
 		len = f.length
 		ttl = -1 # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
 		routingType = "packingSwitching" # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
-		path = "none"
+		path = "none" # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
 
-
+		# Creates header
 		header = ["src="+src, "dst="+dst, "id="+id.to_s, "cmd="+cmd, "fragFlag="+fragFlag.to_s, "fragOffset="+fragOffset.to_s,
 	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+ttl.to_s, "routingType="+routingType, "path="+path].join(",")
 
+	    # Appends header to fragment
 		p = header + ":" + f
 
+		# Adds the packet to the packet list
 		packets.push(p)
 
 		fragOffset = fragOffset + len
@@ -436,6 +458,7 @@ def createPackets(cmd, fragments, dst, totLen)
 end
 
 # Function called by packet buffer processors
+# Not fully implemented. FIX FOR FUTURE PARTS
 def forwardPacket(packet,dst)
 	#before you send possibly fragment
 	#and nextHopwould be incorrect if it's a circuit
@@ -447,16 +470,12 @@ end
 
 # Function that actually calls the TCP function to send message
 def tcpSend(packet, nextHop)
-
 	socket = $nodeToSocket[nextHop]
-	puts "trying to send"
-	puts socket
 	socket.puts(packet)
-	#socket.send(packet, packet.size)
-	puts "sent"
 end
 
 # ---------------- Helper Functions ----------------- #
+
 # Reads the config file and stores its contents into respective variables
 def parseConfig(file)
 	File.foreach(file){ |line|
@@ -479,13 +498,17 @@ def parseNodes(file)
 	}
 end
 
-def getHeaderVal(packet,key)
+# Returns the value of the specified field in the header
+# of the given packet
+def getHeaderVal(packet,field)
 	header = packet.split(":")[0]
-	return header.scan(/#{key}=([^,]*)/).flatten[0]
+	return header.scan(/#{field}=([^,]*)/).flatten[0]
 end
 
 
 # --------------------- Main/Setup ----------------- #
+
+# Starts the three main threads
 def main()
 	#start the thread that will accept incoming connections and read
 	# their input
