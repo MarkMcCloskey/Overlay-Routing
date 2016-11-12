@@ -149,7 +149,14 @@ def edgew(cmd)
 end
 
 def status()
-	STDOUT.puts "STATUS: not implemented"
+	puts "Name:" + " " + $hostname + " " + "Port:" + " " +
+		$port.to_s + " " + "Neighbors:" + " "
+
+	neighbors = $neighbor.keys
+	neighbors = neighbors.join(",")
+	puts neighbors
+
+	
 end
 
 
@@ -210,6 +217,7 @@ def getCmdLin()
 		when "startTime"; puts $timer.startTime
 		when "runTime"; puts $timer.runTime
 		when "port"; puts $port
+		when "STATUS"; status()
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 	end
