@@ -152,8 +152,24 @@ end
 
 
 # --------------------- Part 1 --------------------- # 
+=begin
+edged will be called whenever a connection between nodes should be 
+destroyed. It will take the name of a destination node as input. It will 
+then remove all edge information from this node to the destination node.
+=end
 def edged(cmd)
-	STDOUT.puts "EDGED: not implemented"
+	puts "EDGED called"
+	dst = cmd[0] #get destination from args
+
+	#shutdown and delete the socket connecting the nodes
+	$nodeToSocket[dst].shutdown 
+	$nodeToSocket.delete(dst)
+	
+	#remove destination from all the hashes tracking it
+	$nextHop.delete(dst)
+	$cost.delete(dst)
+	$neighbor.delete(dst)
+	puts "EDGED done"
 end
 
 =begin
@@ -255,7 +271,7 @@ def getCmdLin()
 		case cmd
 		when "EDGEB"; edgeb(args)
 		when "EDGED"; edged(args)
-		when "EDGEW"; edgew(args)
+		when "EDGEU"; edgeu(args)
 		when "DUMPTABLE"; dumptable(args)
 		when "SHUTDOWN"; shutdown(args)
 		when "STATUS"; status()
@@ -273,8 +289,6 @@ def getCmdLin()
 		when "startTime"; puts $timer.startTime
 		when "runTime"; puts $timer.runTime
 		when "port"; puts $port
-		when "STATUS"; status()
-		when "EDGEU"; edgeu(args)
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 	end
