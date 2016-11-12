@@ -1,8 +1,7 @@
-NODE n1 port
-NODE n2 port
-NODE n1 hostname
-NODE n1 updateInterval
-NODE n1 maxPayload
-NODE n1 pingTimeout
+NODE n1 EDGEB 127.0.0.1 127.0.0.1 n2
+NODE n1 DUMPTABLE ./t1_n1_dumptable.txt
+CONTROLLER SLEEP 1
+NODE n2 DUMPTABLE ./t1_n2_dumptable.txt
 CONTROLLER SLEEP 1
 CONTROLLER SHUTDOWN
+

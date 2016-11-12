@@ -127,8 +127,8 @@ end
 
 # Close connections, empty buffers, kill threads
 def shutdown(cmd)
-	$server.kill # This is killing the server thread without gracefully kill the server first. Do we need to fix this?
-	$processPax.kill
+	#$server.kill # This is killing the server thread without gracefully kill the server first. Do we need to fix this?
+	#$processPax.kill
 
 	# Might do a double shutdown if the other end already shutdown the connection. Do we need to fix this?
 	$nodeToSocket.each_value do |socket| 
