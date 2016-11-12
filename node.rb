@@ -79,6 +79,7 @@ def edgeb(cmd)
 	#create a connection with the new neighbor and save the 
 	#socket in the hash
 	puts "trying to connect"
+	sleep(1)
 	$nodeToSocket[dst] = TCPSocket.open(dstIp, $nodeToPort[dst])
 	puts "tcp connected"
 	puts $nodeToSocket[dst]
@@ -126,7 +127,18 @@ def shutdown(cmd)
 	#$cmdLin.kill
 	#$server.kill
 	#$processPax.kill
-	$nodeToSocket.each_value do |val| val.shutdown end
+	$nodeToSocket.each_value do |socket|
+		begin 
+			if !socket.shutdown? then
+				socket.shutdown 
+			end
+		rescue
+			1+1
+		ensure 
+			1+1
+		end
+	end
+
 	$serverConnections.each do |connection|
 		connection.kill
 	end
@@ -144,17 +156,61 @@ def edged(cmd)
 	STDOUT.puts "EDGED: not implemented"
 end
 
-def edgew(cmd)
-	STDOUT.puts "EDGEW: not implemented"
+=begin
+edgeU is the command given to a node to update the cost between itself and
+a direct neighbor node. It will take as input the name of the neighbor and
+the new cost. It will then update the cost to that neigbor, and notify the
+neighbor to do the same.
+=end
+def edgeu(cmd)
+	#check to make sure that none of the fields are missing
+	#NOTE THIS DOESN'T CHECK TO MAKE SURE THEY ARE VALID
+	#THIS IS IN THE SPEC!!!
+	if(!(cmd == nil || cmd[0] == nil || cmd[1] == nil))
+		dst = cmd[0]
+
+		#check to make sure destination is a next hop neighbor
+		#before continuing
+		if($neighbor[dst])
+			
+			#grab the cost from the commands
+			cost = cmd[1].to_i #might not need to_i
+			
+			#update cost in the hash
+			$cost[dst] = cost
+	
+			#prep to send command to neighbor
+			payload = ["EDGEUEXT", $hostname, cost].join(" ")
+			send("EDGEUEXT",payload,dst)
+		end
+	end
+
+end
+
+=begin
+edgeuExt is the function called when a node needs to notify a neighbor that
+the cost between them has changed. It will take as input the name of the 
+neighbor and the new cost. It will then update the cost to get to that 
+neighbor.
+=end
+def edgeuExt(cmd)
+
+	#get commands
+	dst = cmd[0]
+	cost = cmd[1].to_i
+	
+	#update cost hash with the new cost to get to the neighbor
+	$cost[dst] = cost
 end
 
 def status()
-	puts "Name:" + " " + $hostname + " " + "Port:" + " " +
+	STDOUT.print "Name:" + " " + $hostname + " " + "Port:" + " " +
 		$port.to_s + " " + "Neighbors:" + " "
 
 	neighbors = $neighbor.keys
 	neighbors = neighbors.join(",")
-	puts neighbors
+	STDOUT.print neighbors
+	STDOUT.puts
 
 	
 end
@@ -218,6 +274,7 @@ def getCmdLin()
 		when "runTime"; puts $timer.runTime
 		when "port"; puts $port
 		when "STATUS"; status()
+		when "EDGEU"; edgeu(args)
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 	end
@@ -236,6 +293,7 @@ def getCmdExt()
 
 		case cmd
 		when "EDGEBEXT"; edgebExt(args)
+		when "EDGEUEXT"; edgeuExt(args)
 		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
 	end
