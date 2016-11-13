@@ -2,6 +2,7 @@ require 'thread'
 require 'socket'
 require 'csv'
 Thread::abort_on_exception = true
+
 # Properties for this node
 $port = nil
 $hostname = nil
@@ -12,6 +13,8 @@ $neighbor = Hash.new # Boolean hash. Returns true if a the key node is a neighbo
 $timeout = 100000000000000000000000000
 $nextMsgId = 0 # ID used for each unique message created in THIS node
 $packetSize = 100000
+DELTA_T = 0.5
+
 # Routing Table hashes
 # NOTE: Does not contain data for currently 
 # 		unreachable nodes
@@ -23,7 +26,6 @@ $nodeToPort = Hash.new # Contains the port numbers of every node in our universe
 $nodeToSocket = Hash.new # Outgoing sockets to other nodes
 #$startReading = false
 # Timer Object
-$timer
 
 # Buffers
 $recvBuffer = Array.new 
@@ -37,17 +39,24 @@ $cmdExt
 $server
 $processPax
 $serverConnections = Array.new # Array of INCOMING connection threads
+$timer
 
 class Timer
-	DELTA_T = ONE_SECOND = 1
+	DELTA_T = HALF_SECOND = 0.5
 	attr_accessor :startTime, :curTime
 	def initialize
 		@startTime = Time.new
 		@curTime = @startTime
+		@stopWatch = 0
 		@timeUpdater = Thread.new {
 			loop do
 				sleep(DELTA_T)
 				@curTime += DELTA_T
+				@stopWatch += DELTA_T
+				if( @stopWatch % $updateInterval == 0)
+					linkStateUpdate()
+					dijsktras()
+				end
 			end
 		}
 		def startTime
@@ -127,6 +136,7 @@ def shutdown(cmd)
 	#$cmdLin.kill
 	#$server.kill
 	#$processPax.kill
+	$timer.kill
 	$nodeToSocket.each_value do |socket|
 		begin 
 			if !socket.shutdown? then
@@ -231,6 +241,51 @@ def status()
 	
 end
 
+def keepTime
+	time = 0
+	loop do
+		sleep(DELTA_T)
+			time += DELTA_T
+			if(time % $updateInterval == 0)
+				linkStateUpdate
+				dijkstras
+			end
+	end
+end
+
+def linkStateUpdate
+	puts "Flooding link-state updates now"
+=begin PSUEDOCODE
+	FOR EACH KEY IN $COST
+	add KEY=COST to the string that goes in the payload
+	
+	FOR EACH KEY IN NEIGHBOR 
+	SEND THE PAYLOAD 
+=end
+
+	payload = ""
+
+	$cost.each { |node, cost| 
+		payload << node + "=" + cost.to_s 
+	}
+	puts payload
+	
+	$neighbor.each_key { |neighbor| 
+		puts "SENDING LINK STATE UPDATES TO " + neighbor
+		payload = ["LSUEXT", payload, neighbor].join(" ")
+		send("LSUEXT", payload, neighbor)
+	}
+
+end
+
+def linkStateUpdateExt(cmd)
+	puts "linkStateUpdateExt called"
+end
+
+def dijkstras
+	puts "Doing Dijkstras now"
+end
+
 
 # --------------------- Part 2 --------------------- # 
 def sendmsg(cmd)
@@ -308,6 +363,7 @@ def getCmdExt()
 		case cmd
 		when "EDGEBEXT"; edgebExt(args)
 		when "EDGEUEXT"; edgeuExt(args)
+		when "LSUEXT"; linkStateUpdateExt(args)
 		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
 	end
@@ -585,6 +641,10 @@ def main()
 		processPackets()
 	end
 
+	$timer = Thread.new do
+		keepTime()
+	end
+	
 	#make sure the program doesn't terminate prematurely
 	$cmdLin.join
 	$server.join
@@ -598,7 +658,7 @@ def setup(hostname, port, nodes, config)
 	$hostname = hostname
 	$port = port.to_i
 	$TCPserver = TCPServer.new($port)
-	$timer = Timer.new
+	#$timer = Timer.new
 	parseConfig(config)
 	parseNodes(nodes)
 
