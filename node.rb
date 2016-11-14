@@ -399,8 +399,9 @@ def serverThread()
 					if sock.eof? then
 						#close it
 						sock.close
-						serverConnection.kill
+						
 						$serverConnections.delete(serverConnection)
+						serverConnection.kill
 						#possibly delete information
 						#from global variables
 
