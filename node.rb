@@ -263,23 +263,63 @@ def linkStateUpdate
 	SEND THE PAYLOAD 
 =end
 
-	payload = ""
-
+	payloadArr = []
+	puts "MY COSTKEYS FOR " + $hostname + ":" + $cost.to_s
 	$cost.each { |node, cost| 
-		payload << node + "=" + cost.to_s 
+		payloadArr << node + "=" + cost.to_s 
 	}
-	puts payload
+	puts payloadArr
 	
 	$neighbor.each_key { |neighbor| 
 		puts "SENDING LINK STATE UPDATES TO " + neighbor
-		payload = ["LSUEXT", payload, neighbor].join(" ")
+		payload = ["LSUEXT", payloadArr.join(","), $hostname].join(" ")
 		send("LSUEXT", payload, neighbor)
 	}
 
 end
 
+# Updates the node routing table if it finds a cheaper
+# path
 def linkStateUpdateExt(cmd)
 	puts "linkStateUpdateExt called"
+
+	# This array should contain an array of "node=cost"
+	senderCstStr = cmd[0].split(',')
+
+	sender = cmd[1]
+
+	# Hash extracted from the the payload
+	# ie. if the payload has n1=14, this hash
+	# will contain senderCstHash["n1"] = 14
+	senderCstHash = Hash.new
+
+	# Converts the payload string into the hash
+	# explained above
+	senderCstStr.each { |str|
+		# tmp should contain ["n1", "14"]
+		tmp = str.scan(/(.*)=(.*)/).flatten 
+		senderCstHash[tmp[0]] = tmp[1].to_i
+	}
+
+	# Updates the hash table if needed
+	senderCstHash.each { |dst, cst2Dst|
+		# if the dst node is in the global hash,
+		# check if the cost is cheaper. If it is,
+		# update routing table
+		if dst != $hostname 
+			if $cost[dst] != nil
+				if $cost[sender] + cst2Dst < $cost[dst] 
+					$nextHop[dst] = sender
+					$cost[dst] = $cost[sender] + cst2Dst
+				end
+			# If the dst node is NOT in the global has,
+			# add it to the routing table
+			else 
+				$cost[dst] = $cost[sender] + cst2Dst
+				$nextHop[dst] = sender
+			end
+		end
+	}
 end
 
 def dijkstras
