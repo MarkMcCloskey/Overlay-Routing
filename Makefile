@@ -5,4 +5,4 @@ test:
 .PHONY : clean
 clean : 
 	-rm console_*
-	-rm t1_*
+	-rm t*_n*

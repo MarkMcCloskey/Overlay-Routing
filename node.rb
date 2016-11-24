@@ -30,10 +30,14 @@ $nodeToSocket = Hash.new # Outgoing sockets to other nodes
 # Buffers
 $recvBuffer = Array.new 
 $extCmdBuffer = Array.new
+$cmdLinBuffer = Array.new
+$edgeBuffer = Array.new
+$linkBuffer = Array.new
 $packetHash = Hash.new { |h1, k1| h1[k1] =  Hash.new { # Buffer used to make packet processing easier
 	|h2, k2| h2[k2] =  Hash.new}} # packetHash[src][id][offset]
 
 # Threads
+$execute
 $cmdLin
 $cmdExt
 $server
@@ -206,7 +210,7 @@ def edgeu(cmd)
 			$cost[dst] = cost
 	
 			#prep to send command to neighbor
-			payload = ["EDGEUEXT", $hostname, cost].join(" ")
+			#payload = ["EDGEUEXT", $hostname, cost].join(" ")
 			#send("EDGEUEXT",payload,dst)
 		end
 	end
@@ -248,10 +252,44 @@ def keepTime
 			time += DELTA_T
 			if(time % $updateInterval == 0)
 				linkStateUpdate
-				dijkstras
+			end
+			if(time % (1.5*$updateInterval) == 0)
+			   emptyLinkBuffer
+			   emptyEdgeBuffer
 			end
 	end
 end
+
+def emptyLinkBuffer
+	while(!$linkBuffer.empty?)
+	line = $linkBuffer.delete_at(0)
+		line = line.strip()
+
+		arr = line.split(' ')
+		cmd = arr[0]
+		args = arr[1..-1]
+
+		edgeuExt(args)
+	end
+
+end
+
+def emptyEdgeBuffer
+	while(!$edgeBuffer.empty?)
+		line = $edgeBuffer.delete_at(0)
+		line = line.strip()
+		arr = line.split(' ')
+		cmd = arr[0]
+		args = arr[1..-1]
+		case cmd
+		when "EDGED";edged(args)
+		when "EDGEU";edgeu(args)
+		end
+
+
+	end
+end
+
 
 def linkStateUpdate
 	puts "Flooding link-state updates now"
@@ -353,8 +391,11 @@ end
 
 def getCmdLin()
 	while(line = STDIN.gets())
+		$cmdLinBuffer << line
+	end
 		# NEeds to sleep so it doesnt try to do a cmdLin cmd before
 		# finishing a connection
+=begin
 		sleep 0.1 while $server.status != 'sleep'
 
 		if $cmdExt != nil 
@@ -388,7 +429,44 @@ def getCmdLin()
 		when "port"; puts $port
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
-	end
+
+end
+=end
+end
+
+def executeCmdLin()
+
+while(!$cmdLinBuffer.empty?)
+	line = $cmdLinBuffer.delete_at(0)
+		line = line.strip()
+		arr = line.split(' ')
+		cmd = arr[0]
+		args = arr[1..-1]
+		case cmd
+		when "EDGEB"; edgeb(args)
+		when "EDGED"; $edgeBuffer << line #edged(args)
+		when "EDGEU"; $edgeBuffer << line #edgeu(args)
+		when "DUMPTABLE"; dumptable(args)
+		when "SHUTDOWN"; shutdown(args)
+		when "STATUS"; status()
+		when "SENDMSG"; sendmsg(args)
+		when "PING"; ping(args)
+		when "TRACEROUTE"; traceroute(args)
+		when "FTP"; ftp(args)
+		when "CIRCUIT"; circuit(args)
+		when "hostname"; puts $hostname
+		when "updateInterval"; puts $updateInterval
+		when "maxPayload"; puts $maxPayload
+		when "pingTimeout"; puts $pingTimeout
+		when "nodesToPort";puts $nodesToPort
+		when "curTime"; puts $timer.curTime
+		when "startTime"; puts $timer.startTime
+		when "runTime"; puts $timer.runTime
+		when "port"; puts $port
+		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
+		end
+
+end
 end
 
 def getCmdExt()
@@ -404,7 +482,7 @@ def getCmdExt()
 
 		case cmd
 		when "EDGEBEXT"; edgebExt(args)
-		when "EDGEUEXT"; edgeuExt(args)
+		when "EDGEUEXT"; $linkBuffer << line#edgeuExt(args)
 		when "LSUEXT"; linkStateUpdateExt(args)
 		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
@@ -502,7 +580,7 @@ end
 def processPackets()
 	totLen = nil
 	checkPackets = false
-	loop do
+#	loop do
 		while (!$recvBuffer.empty?)
 			checkPackets = true
 			puts "data in recv buffer"
@@ -539,11 +617,11 @@ def processPackets()
 			checkPackets = false
 		end
 
-		$cmdExt = Thread.new do
-			getCmdExt()
-		end
-		$cmdExt.join
-	end
+#		$cmdExt = Thread.new do
+#			getCmdExt()
+#		end
+#		$cmdExt.join
+#	end
 end
 
 =begin
@@ -679,11 +757,19 @@ def main()
 		getCmdLin()
 	end
 
-
+=begin
 	$processPax = Thread.new do
 		processPackets()
 	end
+=end
 
+	$execute = Thread.new do
+		while 1
+		processPackets
+		getCmdExt
+		executeCmdLin
+		end
+	end
 	$timer = Thread.new do
 		keepTime()
 	end
