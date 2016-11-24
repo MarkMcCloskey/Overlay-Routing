@@ -91,11 +91,11 @@ def edgeb(cmd)
 
 	#create a connection with the new neighbor and save the 
 	#socket in the hash
-	puts "trying to connect"
+	#puts "trying to connect"
 	sleep(1)
 	$nodeToSocket[dst] = TCPSocket.open(dstIp, $nodeToPort[dst])
-	puts "tcp connected"
-	puts $nodeToSocket[dst]
+	#puts "tcp connected"
+	#puts $nodeToSocket[dst]
 	$nextHop[dst] = dst
 	$cost[dst] = 1
 	$neighbor[dst] = true
@@ -106,8 +106,8 @@ def edgeb(cmd)
 end
 
 def edgebExt(cmd)
-	puts "edgebExt called"
-	puts cmd
+	#puts "edgebExt called"
+	#puts cmd
 	srcIp = cmd[0]
 	node = cmd[1]
 
@@ -119,9 +119,9 @@ def edgebExt(cmd)
 
 	#open a connection between this node and the new neighbor
 	#and save the socket in the hash
-	puts "edgebext about to open connection"
+	#puts "edgebext about to open connection"
 	$nodeToSocket[node] = TCPSocket.open(srcIp, $nodeToPort[node])
-	puts "edgebext opened connection"
+	#puts "edgebext opened connection"
 end
 
 def dumptable(args)
@@ -172,7 +172,7 @@ destroyed. It will take the name of a destination node as input. It will
 then remove all edge information from this node to the destination node.
 =end
 def edged(cmd)
-	puts "EDGED called"
+	#puts "EDGED called"
 	dst = cmd[0] #get destination from args
 
 	#shutdown and delete the socket connecting the nodes
@@ -183,7 +183,7 @@ def edged(cmd)
 	$nextHop.delete(dst)
 	$cost.delete(dst)
 	$neighbor.delete(dst)
-	puts "EDGED done"
+	#puts "EDGED done"
 end
 
 =begin
@@ -292,7 +292,7 @@ end
 
 
 def linkStateUpdate
-	puts "Flooding link-state updates now"
+	#puts "Flooding link-state updates now"
 =begin PSUEDOCODE
 	FOR EACH KEY IN $COST
 	add KEY=COST to the string that goes in the payload
@@ -302,14 +302,14 @@ def linkStateUpdate
 =end
 
 	payloadArr = []
-	puts "MY COSTKEYS FOR " + $hostname + ":" + $cost.to_s
+	#puts "MY COSTKEYS FOR " + $hostname + ":" + $cost.to_s
 	$cost.each { |node, cost| 
 		payloadArr << node + "=" + cost.to_s 
 	}
-	puts payloadArr
+	#puts payloadArr
 	
 	$neighbor.each_key { |neighbor| 
-		puts "SENDING LINK STATE UPDATES TO " + neighbor
+		#puts "SENDING LINK STATE UPDATES TO " + neighbor
 		payload = ["LSUEXT", payloadArr.join(","), $hostname].join(" ")
 		send("LSUEXT", payload, neighbor)
 	}
@@ -319,7 +319,7 @@ end
 # Updates the node routing table if it finds a cheaper
 # path
 def linkStateUpdateExt(cmd)
-	puts "linkStateUpdateExt called"
+	#puts "linkStateUpdateExt called"
 
 	# This array should contain an array of "node=cost"
 	senderCstStr = cmd[0].split(',')
@@ -471,7 +471,7 @@ end
 
 def getCmdExt()
 	while(!$extCmdBuffer.empty?)
-		puts "inside getCmdExt"
+	#	puts "inside getCmdExt"
 
 		line = $extCmdBuffer.delete_at(0)
 		line = line.strip()
@@ -491,7 +491,7 @@ end
 
 def serverThread()
 	#start a server on this nodes port
-	puts "in serverThread"
+	#puts "in serverThread"
 	#server = TCPServer.new($port)
 	#puts "Server: " + server.to_s
 	loop do
@@ -500,17 +500,17 @@ def serverThread()
 
 		serverConnection = Thread.start($TCPserver.accept) do |client|
 			#add the socket to a global list of incoming socks
-			puts "client connected" + client.to_s
-			puts serverConnection
+			#puts "client connected" + client.to_s
+			#puts serverConnection
 			$serverConnections << serverConnection
 
 
 			loop do
 				#wait for a connection to have data
-				puts "waiting for data"
+				#puts "waiting for data"
 				incomingData = select( [client] , nil, nil)	
-				puts "receiving data"
-				puts incomingData[0]
+				#puts "receiving data"
+				#puts incomingData[0]
 
 				#loop through the incoming sockets that
 				#have data
@@ -528,11 +528,11 @@ def serverThread()
 					else
 						#read what the connection
 						#has
-						puts "putting data in buffer"
+						#puts "putting data in buffer"
 						$recvBuffer << sock.gets
 						#$recvBuffer << sock.recv($packetSize)
-						puts "data should be in the buff"
-						puts $recvBuffer[-1]
+						#puts "data should be in the buff"
+						#puts $recvBuffer[-1]
 					end
 				end
 			end
@@ -583,30 +583,30 @@ def processPackets()
 #	loop do
 		while (!$recvBuffer.empty?)
 			checkPackets = true
-			puts "data in recv buffer"
+			#puts "data in recv buffer"
 			packet = $recvBuffer.delete_at(0)
 			src = getHeaderVal(packet,"src")
 			id = getHeaderVal(packet, "id").to_i
 			offset = getHeaderVal(packet, "offset").to_i
 			$packetHash[src][id][offset] = packet
-			puts "Src: "+ src 
-			puts "Id: " + id.to_s
-			puts "Offset: " + offset.to_s
-			puts "totLen: " + getHeaderVal(packet, "totLen") 
+			#puts "Src: "+ src 
+			#puts "Id: " + id.to_s
+			#puts "Offset: " + offset.to_s
+			#puts "totLen: " + getHeaderVal(packet, "totLen") 
 		end
 		if checkPackets
 			$packetHash.each {|srcKey,srcHash|
 				srcHash.each {|idKey, idHash|
 					sum = 0
 					idHash.keys.sort.each {|k|
-						puts"inside id hash"
+						#puts"inside id hash"
 						packet = idHash[k]
 						totLen = getHeaderVal(packet, "totLen").to_i
 						sum = sum + getHeaderVal(packet, "len").to_i
 					}
 
 					if totLen!= nil && totLen == sum
-						puts "totLen"
+						#puts "totLen"
 						msg = reconstructMsg(idHash)
 						$extCmdBuffer << msg
 						$packetHash[srcKey].delete(idKey)
@@ -706,11 +706,11 @@ end
 def tcpSend(packet, nextHop)
 
 	socket = $nodeToSocket[nextHop]
-	puts "trying to send"
-	puts socket
+	#puts "trying to send"
+	#puts socket
 	socket.puts(packet)
 	#socket.send(packet, packet.size)
-	puts "sent"
+	#puts "sent"
 end
 
 # ---------------- Helper Functions ----------------- #
