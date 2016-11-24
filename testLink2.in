@@ -24,5 +24,10 @@ NODE n1 DUMPTABLE t3_n1_dumptable.txt
 NODE n2 DUMPTABLE t3_n2_dumptable.txt
 NODE n3 DUMPTABLE t3_n3_dumptable.txt
 NODE n4 DUMPTABLE t3_n4_dumptable.txt
+CONTROLLER SLEEP 7
+NODE n1 DUMPTABLE t4_n1_dumptable.txt
+NODE n2 DUMPTABLE t4_n2_dumptable.txt
+NODE n3 DUMPTABLE t4_n3_dumptable.txt
+NODE n4 DUMPTABLE t4_n4_dumptable.txt
 CONTROLLER SHUTDOWN
 

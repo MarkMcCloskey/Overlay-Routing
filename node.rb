@@ -31,8 +31,8 @@ $nodeToSocket = Hash.new # Outgoing sockets to other nodes
 $recvBuffer = Array.new 
 $extCmdBuffer = Array.new
 $cmdLinBuffer = Array.new
-$edgeBuffer = Array.new
-$linkBuffer = Array.new
+$edgeBuffer = Array.new #buffer edgeu edged commands
+$linkBuffer = Array.new #buffer link state packets
 $packetHash = Hash.new { |h1, k1| h1[k1] =  Hash.new { # Buffer used to make packet processing easier
 	|h2, k2| h2[k2] =  Hash.new}} # packetHash[src][id][offset]
 
@@ -178,7 +178,7 @@ def edged(cmd)
 	#shutdown and delete the socket connecting the nodes
 	$nodeToSocket[dst].shutdown 
 	$nodeToSocket.delete(dst)
-	
+
 	#remove destination from all the hashes tracking it
 	$nextHop.delete(dst)
 	$cost.delete(dst)
@@ -202,13 +202,13 @@ def edgeu(cmd)
 		#check to make sure destination is a next hop neighbor
 		#before continuing
 		if($neighbor[dst])
-			
+
 			#grab the cost from the commands
 			cost = cmd[1].to_i #might not need to_i
-			
+
 			#update cost in the hash
 			$cost[dst] = cost
-	
+
 			#prep to send command to neighbor
 			#payload = ["EDGEUEXT", $hostname, cost].join(" ")
 			#send("EDGEUEXT",payload,dst)
@@ -228,7 +228,7 @@ def edgeuExt(cmd)
 	#get commands
 	dst = cmd[0]
 	cost = cmd[1].to_i
-	
+
 	#update cost hash with the new cost to get to the neighbor
 	$cost[dst] = cost
 end
@@ -242,27 +242,44 @@ def status()
 	STDOUT.print neighbors
 	STDOUT.puts
 
-	
+
 end
 
+=begin
+timer that ensures link state packets are delivered and edge updates are
+applied. At the correct times it will spawn new threads to take care of
+this action.
+=end
 def keepTime
 	time = 0
 	loop do
 		sleep(DELTA_T)
-			time += DELTA_T
-			if(time % $updateInterval == 0)
+		time += DELTA_T
+		#every update Interval flood link state packets
+		if(time % $updateInterval == 0)
+			Thread.new do
 				linkStateUpdate
 			end
-			if(time % (1.5*$updateInterval) == 0)
-			   emptyLinkBuffer
-			   emptyEdgeBuffer
+		end
+		
+		#let link state packets settle for half an interval
+		#then apply them to graph
+		#then apply edged edgeu updates to graph
+		if(time % (1.5*$updateInterval) == 0)
+			Thread.new do
+				emptyLinkBuffer
+				emptyEdgeBuffer
 			end
+		end
 	end
 end
 
+=begin
+cycle through all the link state packets and apply them to the graph
+=end
 def emptyLinkBuffer
 	while(!$linkBuffer.empty?)
-	line = $linkBuffer.delete_at(0)
+		line = $linkBuffer.delete_at(0)
 		line = line.strip()
 
 		arr = line.split(' ')
@@ -274,6 +291,9 @@ def emptyLinkBuffer
 
 end
 
+=begin
+cycle through all the edge updating commands and apply them to the graph
+=end
 def emptyEdgeBuffer
 	while(!$edgeBuffer.empty?)
 		line = $edgeBuffer.delete_at(0)
@@ -296,7 +316,7 @@ def linkStateUpdate
 =begin PSUEDOCODE
 	FOR EACH KEY IN $COST
 	add KEY=COST to the string that goes in the payload
-	
+
 	FOR EACH KEY IN NEIGHBOR 
 	SEND THE PAYLOAD 
 =end
@@ -307,7 +327,7 @@ def linkStateUpdate
 		payloadArr << node + "=" + cost.to_s 
 	}
 	#puts payloadArr
-	
+
 	$neighbor.each_key { |neighbor| 
 		#puts "SENDING LINK STATE UPDATES TO " + neighbor
 		payload = ["LSUEXT", payloadArr.join(","), $hostname].join(" ")
@@ -349,9 +369,12 @@ def linkStateUpdateExt(cmd)
 				if $cost[sender] + cst2Dst < $cost[dst] 
 					$nextHop[dst] = sender
 					$cost[dst] = $cost[sender] + cst2Dst
+					#consider when path gets worse 
+				elsif sender == $nextHop[dst]
+					$cost[dst] = $cost[sender] + cst2Dst
 				end
-			# If the dst node is NOT in the global has,
-			# add it to the routing table
+				# If the dst node is NOT in the global has,
+				# add it to the routing table
 			else 
 				$cost[dst] = $cost[sender] + cst2Dst
 				$nextHop[dst] = sender
@@ -389,55 +412,23 @@ end
 
 # --------------------- Threads --------------------- #
 
+=begin
+getCmdLin will receive any input from the command line and buffer it.
+=end
 def getCmdLin()
 	while(line = STDIN.gets())
 		$cmdLinBuffer << line
 	end
-		# NEeds to sleep so it doesnt try to do a cmdLin cmd before
-		# finishing a connection
+end
+
 =begin
-		sleep 0.1 while $server.status != 'sleep'
-
-		if $cmdExt != nil 
-			$cmdExt.join
-		end
-
-		line = line.strip()
-		arr = line.split(' ')
-		cmd = arr[0]
-		args = arr[1..-1]
-		case cmd
-		when "EDGEB"; edgeb(args)
-		when "EDGED"; edged(args)
-		when "EDGEU"; edgeu(args)
-		when "DUMPTABLE"; dumptable(args)
-		when "SHUTDOWN"; shutdown(args)
-		when "STATUS"; status()
-		when "SENDMSG"; sendmsg(args)
-		when "PING"; ping(args)
-		when "TRACEROUTE"; traceroute(args)
-		when "FTP"; ftp(args)
-		when "CIRCUIT"; circuit(args)
-		when "hostname"; puts $hostname
-		when "updateInterval"; puts $updateInterval
-		when "maxPayload"; puts $maxPayload
-		when "pingTimeout"; puts $pingTimeout
-		when "nodesToPort";puts $nodesToPort
-		when "curTime"; puts $timer.curTime
-		when "startTime"; puts $timer.startTime
-		when "runTime"; puts $timer.runTime
-		when "port"; puts $port
-		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
-		end
-
-end
+executeCmdLin will take all the buffered commands from the command line
+and execute them.
 =end
-end
-
 def executeCmdLin()
 
-while(!$cmdLinBuffer.empty?)
-	line = $cmdLinBuffer.delete_at(0)
+	while(!$cmdLinBuffer.empty?)
+		line = $cmdLinBuffer.delete_at(0)
 		line = line.strip()
 		arr = line.split(' ')
 		cmd = arr[0]
@@ -466,12 +457,16 @@ while(!$cmdLinBuffer.empty?)
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 
-end
+	end
 end
 
-def getCmdExt()
+=begin
+executeCmdExt will cycle through the commands that come from other nodes
+and execute them.
+=end
+def executeCmdExt()
 	while(!$extCmdBuffer.empty?)
-	#	puts "inside getCmdExt"
+		#	puts "inside getCmdExt"
 
 		line = $extCmdBuffer.delete_at(0)
 		line = line.strip()
@@ -519,7 +514,7 @@ def serverThread()
 					if sock.eof? then
 						#close it
 						sock.close
-						
+
 						$serverConnections.delete(serverConnection)
 						serverConnection.kill
 						#possibly delete information
@@ -541,37 +536,8 @@ def serverThread()
 	end
 
 
-
-
-	#puts "in server accept"
-	#assuming reading from a client will give
-	#full packet
 =begin
-	This is an infinite loop that will hang on select waiting for data from
-	the socket connection. If an even occurs it will check to see if the client
-	has disconnected, and if so close that socket. Otherwise it will read from
-	the socket
-=end
-=begin
-			while 1
-				incomingData = select(client, nil, nil)	
-
-				for sock in incomingData[0]
-					if sock.eof? then
-						sock.close
-					else
-						$recvBuffer << sock.gets
-					end
-				end
-			end
-
-		end
-=begin
-	This is for another idea where we keep all socket connections in one place
-	and then use select on all of them only reading from that ones that have
-	incoming data
-	$serverConnections << serverConnection
-	here's a good example
+here's a good example
 	://www6.software.ibm.com/developerworks/education/l-rubysocks/l-rubysocks
 	-a4.pdf
 =end
@@ -580,48 +546,48 @@ end
 def processPackets()
 	totLen = nil
 	checkPackets = false
-#	loop do
-		while (!$recvBuffer.empty?)
-			checkPackets = true
-			#puts "data in recv buffer"
-			packet = $recvBuffer.delete_at(0)
-			src = getHeaderVal(packet,"src")
-			id = getHeaderVal(packet, "id").to_i
-			offset = getHeaderVal(packet, "offset").to_i
-			$packetHash[src][id][offset] = packet
-			#puts "Src: "+ src 
-			#puts "Id: " + id.to_s
-			#puts "Offset: " + offset.to_s
-			#puts "totLen: " + getHeaderVal(packet, "totLen") 
-		end
-		if checkPackets
-			$packetHash.each {|srcKey,srcHash|
-				srcHash.each {|idKey, idHash|
-					sum = 0
-					idHash.keys.sort.each {|k|
-						#puts"inside id hash"
-						packet = idHash[k]
-						totLen = getHeaderVal(packet, "totLen").to_i
-						sum = sum + getHeaderVal(packet, "len").to_i
-					}
-
-					if totLen!= nil && totLen == sum
-						#puts "totLen"
-						msg = reconstructMsg(idHash)
-						$extCmdBuffer << msg
-						$packetHash[srcKey].delete(idKey)
-
-					end
+	#	loop do
+	while (!$recvBuffer.empty?)
+		checkPackets = true
+		#puts "data in recv buffer"
+		packet = $recvBuffer.delete_at(0)
+		src = getHeaderVal(packet,"src")
+		id = getHeaderVal(packet, "id").to_i
+		offset = getHeaderVal(packet, "offset").to_i
+		$packetHash[src][id][offset] = packet
+		#puts "Src: "+ src 
+		#puts "Id: " + id.to_s
+		#puts "Offset: " + offset.to_s
+		#puts "totLen: " + getHeaderVal(packet, "totLen") 
+	end
+	if checkPackets
+		$packetHash.each {|srcKey,srcHash|
+			srcHash.each {|idKey, idHash|
+				sum = 0
+				idHash.keys.sort.each {|k|
+					#puts"inside id hash"
+					packet = idHash[k]
+					totLen = getHeaderVal(packet, "totLen").to_i
+					sum = sum + getHeaderVal(packet, "len").to_i
 				}
-			}
-			checkPackets = false
-		end
 
-#		$cmdExt = Thread.new do
-#			getCmdExt()
-#		end
-#		$cmdExt.join
-#	end
+				if totLen!= nil && totLen == sum
+					#puts "totLen"
+					msg = reconstructMsg(idHash)
+					$extCmdBuffer << msg
+					$packetHash[srcKey].delete(idKey)
+
+				end
+			}
+		}
+		checkPackets = false
+	end
+
+	#		$cmdExt = Thread.new do
+	#			getCmdExt()
+	#		end
+	#		$cmdExt.join
+	#	end
 end
 
 =begin
@@ -765,15 +731,15 @@ def main()
 
 	$execute = Thread.new do
 		while 1
-		processPackets
-		getCmdExt
-		executeCmdLin
+			processPackets
+			executeCmdExt
+			executeCmdLin
 		end
 	end
 	$timer = Thread.new do
 		keepTime()
 	end
-	
+
 	#make sure the program doesn't terminate prematurely
 	$cmdLin.join
 	$server.join
