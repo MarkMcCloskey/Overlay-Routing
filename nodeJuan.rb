@@ -207,7 +207,7 @@ def edgeu(cmd)
 	
 			#prep to send command to neighbor
 			payload = ["EDGEUEXT", $hostname, cost].join(" ")
-			#send("EDGEUEXT",payload,dst)
+			send("EDGEUEXT",payload,dst)
 		end
 	end
 
@@ -247,8 +247,12 @@ def keepTime
 		sleep(DELTA_T)
 			time += DELTA_T
 			if(time % $updateInterval == 0)
-				linkStateUpdate
-				dijkstras
+				if $linkThread == nil || $linkThread.status == false
+					$linkThread = Thread.new do
+						linkStateUpdate
+					end
+				end
+				#dijkstras
 			end
 	end
 end
@@ -353,15 +357,13 @@ end
 
 def getCmdLin()
 	while(line = STDIN.gets())
-		# NEeds to sleep so it doesnt try to do a cmdLin cmd before
-		# finishing a connection
 		sleep 0.1 while $server.status != 'sleep'
-
 		if $cmdExt != nil 
 			$cmdExt.join
 		end
 
 		line = line.strip()
+
 		arr = line.split(' ')
 		cmd = arr[0]
 		args = arr[1..-1]
