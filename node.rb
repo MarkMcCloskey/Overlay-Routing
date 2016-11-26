@@ -13,6 +13,8 @@ $neighbor = Hash.new # Boolean hash. Returns true if a the key node is a neighbo
 $timeout = 100000000000000000000000000
 $nextMsgId = 0 # ID used for each unique message created in THIS node
 $packetSize = 100000
+$nodeToPings = Hash.new #hash table to track pings goes from nodeName =>
+		        #array
 DELTA_T = 0.5
 
 # Routing Table hashes
@@ -24,8 +26,6 @@ $TCPserver
 # TCP hashes
 $nodeToPort = Hash.new # Contains the port numbers of every node in our universe
 $nodeToSocket = Hash.new # Outgoing sockets to other nodes
-#$startReading = false
-# Timer Object
 
 # Buffers
 $recvBuffer = Array.new 
@@ -44,25 +44,24 @@ $server
 $processPax
 $serverConnections = Array.new # Array of INCOMING connection threads
 $timer
+$clock
 
 class Timer
-	DELTA_T = HALF_SECOND = 0.5
+	DELTA_T = TENTH_SECOND = 0.1
 	attr_accessor :startTime, :curTime
 	def initialize
 		@startTime = Time.new
 		@curTime = @startTime
-		@stopWatch = 0
 		@timeUpdater = Thread.new {
 			loop do
+				#sleep for some specified time then wake
+				#and update timer
 				sleep(DELTA_T)
 				@curTime += DELTA_T
-				@stopWatch += DELTA_T
-				if( @stopWatch % $updateInterval == 0)
-					linkStateUpdate()
-					dijsktras()
-				end
+
 			end
 		}
+
 		def startTime
 			@startTime
 		end
@@ -261,7 +260,7 @@ def keepTime
 				linkStateUpdate
 			end
 		end
-		
+
 		#let link state packets settle for half an interval
 		#then apply them to graph
 		#then apply edged edgeu updates to graph
@@ -393,8 +392,89 @@ def sendmsg(cmd)
 	STDOUT.puts "SENDMSG: not implemented"
 end
 
+=begin
+ping will take an array of arguments in the following order 
+[destination #ofPingsToSend delay]. It will then send #ofPings to
+destination with a delay in between each ping.
+
+The packet a ping message will send looks like
+PINGEXT dst sendTime src($hostname)
+=end
 def ping(cmd)
-	STDOUT.puts "PING: not implemented"
+	#get input
+	dst = cmd[0]
+	numPings = cmd[1].to_i
+	delay = cmd[3].to_i
+	
+	#if the ping hash doesn't have an entry for dst, make one
+	if !$nodeToPings[dst].member?
+		$nodeToPings[dst] = Array.new # array to hold ping timers
+	end
+	#spawn a thread to keep track of time
+	Thread.new do
+		time = 0
+		sleepTime = delay/2
+
+		#while we still have pings that need to be sent
+		while pingCounter < numPings
+			
+			sleep sleepTime
+			time += sleepTime
+			
+			#time to send a ping packet
+			if(time % delay == 0)
+				
+				#spawn a thread the send the packet
+				#may be unecessary but might help keep time
+				#more accurately
+				Thread.new do
+					
+					#get time being sent
+					#for comparison on return
+					#to calculate round trip time
+					sendTime = $clock.runTime
+					
+					#send the command, destination
+					#sendtime and src as the payload
+					#src may not be necessary if we 
+					#can parse from header
+					payload = ["PINGEXT",dst,sendTime,
+					$hostname].join(" ")
+					send("PINGEXT",payload,dst)
+
+					#put the timer in the hash
+					$nodeToPing[dst] << $pingTimeout
+					#start a timer decrementer thread?
+				end
+			end
+		end
+	end
+
+=begin PSUEDOCODE
+Thread.new do
+	pingCounter = 0
+	time = 0
+	sendTime # grab time from Timer and put it in packet to be compared
+		 # when the packet returns
+	start timer to track delay
+	while pingCounter < numPings
+	sleep delay/2
+	time += delay/2
+	if(time%delay == 0)
+	send ping
+	pingCounter++
+	end
+	end
+	end
+
+=end PSUEDOCODE
+end
+
+=begin
+pingExt will allow this node to handle the response from ping messages.
+
+=end
+def pingExt(cmd)
 end
 
 def traceroute(cmd)
@@ -450,9 +530,9 @@ def executeCmdLin()
 		when "maxPayload"; puts $maxPayload
 		when "pingTimeout"; puts $pingTimeout
 		when "nodesToPort";puts $nodesToPort
-		when "curTime"; puts $timer.curTime
-		when "startTime"; puts $timer.startTime
-		when "runTime"; puts $timer.runTime
+		when "curTime"; puts $clock.curTime
+		when "startTime"; puts $clock.startTime
+		when "runTime"; puts $clock.runTime
 		when "port"; puts $port
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
@@ -736,6 +816,7 @@ def main()
 			executeCmdLin
 		end
 	end
+
 	$timer = Thread.new do
 		keepTime()
 	end
@@ -753,7 +834,7 @@ def setup(hostname, port, nodes, config)
 	$hostname = hostname
 	$port = port.to_i
 	$TCPserver = TCPServer.new($port)
-	#$timer = Timer.new
+	$clock = Timer.new
 	parseConfig(config)
 	parseNodes(nodes)
 
