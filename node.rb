@@ -401,23 +401,32 @@ The packet a ping message will send looks like
 PINGEXT dst sendTime src($hostname)
 =end
 def ping(cmd)
-	#get input
+	#get inputi
+	#puts "In Ping"
+	#puts cmd
 	dst = cmd[0]
 	numPings = cmd[1].to_i
-	delay = cmd[3].to_i
+	delay = cmd[2].to_i
 	
 	#if the ping hash doesn't have an entry for dst, make one
-	if !$nodeToPings[dst].member?
-		$nodeToPings[dst] = Array.new # array to hold ping timers
-	end
+	#if !$nodeToPings[dst].member?
+	#	$nodeToPings[dst] = Array.new # array to hold ping timers
+	#end
 	#spawn a thread to keep track of time
-	Thread.new do
+	Thread.new(dst,numPings,delay) { |dst,numPings,delay|
+		puts "In first thread"
+		puts dst
+		puts numPings
+		puts delay
+		
+		
 		time = 0
-		sleepTime = delay/2
-
+		sleepTime = delay/4
+		pingCounter = 0
 		#while we still have pings that need to be sent
 		while pingCounter < numPings
-			
+			puts "pingCounter: " + pingCounter.to_s
+
 			sleep sleepTime
 			time += sleepTime
 			
@@ -427,28 +436,37 @@ def ping(cmd)
 				#spawn a thread the send the packet
 				#may be unecessary but might help keep time
 				#more accurately
-				Thread.new do
+				Thread.new(pingCounter,dst) { |pingCounter,dst|
+					
+				puts "In second thread"
+				#puts pingCounter
+				puts "Destination: " + dst
 					
 					#get time being sent
 					#for comparison on return
 					#to calculate round trip time
 					sendTime = $clock.runTime
-					
-					#send the command, destination
-					#sendtime and src as the payload
+					#MARK comment this and it breaks
+					sendTime = sendTime.round(3)	
+					#send the command, ACK, sendtime,
+					# Sequence #, destination and src
+					#as the payload
+
 					#src may not be necessary if we 
 					#can parse from header
-					payload = ["PINGEXT",dst,sendTime,
-					$hostname].join(" ")
+					payload = ["PINGEXT", "ACK=0",sendTime, pingCounter, dst, $hostname].join(" ")
+				puts "Payload: " + payload.to_s	
 					send("PINGEXT",payload,dst)
 
 					#put the timer in the hash
-					$nodeToPing[dst] << $pingTimeout
+					#$nodeToPing[dst] << $pingTimeout
 					#start a timer decrementer thread?
-				end
+				}
+				
+				pingCounter += 1
 			end
 		end
-	end
+	}
 
 =begin PSUEDOCODE
 Thread.new do
@@ -475,6 +493,43 @@ pingExt will allow this node to handle the response from ping messages.
 
 =end
 def pingExt(cmd)
+	#this line pulls the ack out of the payload and converts it to int
+	#turns "ACK=X" -> x this int is needed for response decision logic
+	
+	
+	ack = cmd[0].partition("=")[2].to_i
+	puts"pingExt Called with Ack: " + ack.to_s + " " + "Command: " + cmd.to_s
+	if(ack == 0)#send response to ping
+		sendTime = cmd[1] #pull time sent from payload
+		seqNum = cmd[2]	  #pull the sequence number from payload
+		dst = cmd[4]	  #pull return destination from payload
+	puts "In pingExt Ack=0"
+	puts "Dst: " + dst + " seqNum: " + seqNum + " sendTime: " + sendTime
+		
+		payload = ["PINGEXT", "ACK=1", sendTime, seqNum,dst, $hostname].join(" ")
+		send("PINGEXT",payload,dst)
+
+	end
+	if(ack == 1)#print ping messages
+		#MARK NEED TO ADD LOGIC THAT CHECKS TO SEE IF PINGTIMEOUT
+		#HAS EXPIRED BEFORE YOU DO THIS
+
+
+		sendTime = cmd[1].to_f #pull sendTime and make it float
+		seqNum = cmd[2]	       #pull seqNum
+		dst = cmd[3]	       #pull the original destination
+		rtt = $clock.runTime - sendTime
+		rtt = rtt.round(3)
+		puts seqNum + " " + dst + " " + rtt.to_s
+	end
+
+=begin PSUEDOCODE
+
+if header contains ACK
+then print receipt
+else
+reply to sender with PING ACK
+=end PSUEDOCODE
 end
 
 def traceroute(cmd)
@@ -556,6 +611,7 @@ def executeCmdExt()
 		args = arr[1..-1]
 
 		case cmd
+		when "PINGEXT"; pingExt(args)
 		when "EDGEBEXT"; edgebExt(args)
 		when "EDGEUEXT"; $linkBuffer << line#edgeuExt(args)
 		when "LSUEXT"; linkStateUpdateExt(args)
@@ -692,10 +748,9 @@ end
 
 # --------------------- Outgoing Packets Functions --------------------- #
 =begin
-	Send function for commands from this node's terminal NOT for commands from
-	other nodes
-	Fragments the payload, adds the IP header to each packet, and sends each
-	packet to the next node
+Send function for commands from this node's terminal NOT for commands from
+other nodes Fragments the payload, adds the IP header to each packet, and
+sends each packet to the next node
 =end
 def send(cmd, msg, dst)
 	fragments = msg.chars.to_a.each_slice($maxPayload).to_a.map{|s|
