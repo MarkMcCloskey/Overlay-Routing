@@ -389,9 +389,43 @@ end
 
 # --------------------- Part 2 --------------------- # 
 def sendmsg(cmd)
-	STDOUT.puts "SENDMSG: not implemented"
+	STDOUT.puts "SENDMSG called"
+
+	dst = cmd[0]		#pull destination
+	msg = cmd[1]		#pull message
+	puts "Destination: " + dst + " Message: " + msg
+
+
+	payload = ["SENDMSGEXT", msg, $hostname].join(" ")
+	puts "Payload: " + payload.to_s
+	size = payload.length	#pull size to check when sending
+	puts "Payload Size: " + size.to_s
+=begin
+	MARK, to ensure full message sent, make the send chain return
+	the number of bytes sent then catch it here and do a check
+=end
+
+	send("SENDMSGEXT", payload, dst)
+=begin PSUEDOCODE
+	This should be relatively simple with our implementation.
+	The only trouble should be timers.
+
+	Get the dst and MSG from cmd array
+	store MSG size
+	build a payload using the arguments and send it.
+	track amount sent and compare to msg size. if not the same print
+	error
+=end PSUEDOCODE
 end
 
+def sendmsgExt(cmd)
+	STDOUT.puts "SENDMSGEXT called"
+	msg = cmd[0]
+	src = cmd[1]
+
+	puts "SENDMSG: " + src + " --> " + msg
+
+end
 =begin
 ping will take an array of arguments in the following order 
 [destination #ofPingsToSend delay]. It will then send #ofPings to
@@ -615,6 +649,7 @@ def executeCmdExt()
 		when "EDGEBEXT"; edgebExt(args)
 		when "EDGEUEXT"; $linkBuffer << line#edgeuExt(args)
 		when "LSUEXT"; linkStateUpdateExt(args)
+		when "SENDMSGEXT"; sendmsgExt(args)
 		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
 	end
