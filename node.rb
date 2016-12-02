@@ -15,6 +15,7 @@ $nextMsgId = 0 # ID used for each unique message created in THIS node
 $packetSize = 100000
 $nodeToPings = Hash.new #hash table to track pings goes from nodeName =>
 		        #array
+$traceRoute = Hash.new
 DELTA_T = 0.5
 
 # Routing Table hashes
@@ -388,6 +389,13 @@ end
 
 
 # --------------------- Part 2 --------------------- # 
+=begin
+
+sendmsg will take an array of comands [destination message]. It will then
+send the message to the destination. If the  destination is unreachable or 
+the whole message cannot be sent, sendmsg will print an error.
+
+=end
 def sendmsg(cmd)
 	STDOUT.puts "SENDMSG called"
 
@@ -418,7 +426,17 @@ def sendmsg(cmd)
 =end PSUEDOCODE
 end
 
+=begin
+
+sendmsgExt is the receiving end of sendmsg. When a message comes in it 
+prints it in the following format: SENDMSG: [SOURCE] --> [MESSAGE]
+
+=end
 def sendmsgExt(cmd)
+	#MARK PROBABLY NEED TO BUFFER THESE AND ENSURE THE FULL MESSAGE HAS
+	#ARRIVED BEFORE PRINTING MAYBE ADD TOTLEN
+	#DOES OUR IMPLEMENTATION HANDLE THIS?
+	
 	STDOUT.puts "SENDMSGEXT called"
 	msg = cmd[0]
 	src = cmd[1]
@@ -566,8 +584,79 @@ reply to sender with PING ACK
 =end PSUEDOCODE
 end
 
+=begin
+
+traceroute will take an array of arguments in the form [destination].
+It will lead to the printing of the hops taken to get from source node
+to destination node. If a node takes too long to reply it will print a 
+failure message for that node.
+Output will be in the following form:
+	For a successful reply -> [hopcount host-ID Time-to-node]
+	For an unsuccessful reply -> timeout on hopcount
+=end
 def traceroute(cmd)
-	STDOUT.puts "TRACEROUTE: not implemented"
+	STDOUT.puts "TRACEROUTE called"
+	
+	dst = cmd[0]			#pull destination from argument
+	$traceRoute[dst] = Array.new	#create new route in hash
+	$traceRoute[dst] << "0 " + $hostname  #ADD TIME add source to hash
+
+	#create the payload. Payload will look like 
+	#[COMMAND, source, destination, hopcount]
+	#Source so that all nodes know where to send their return packets
+	#destination so all nodes know where to forward traceroute
+	#hopcount so each can increment and reply correctly
+	#  **NEED TO ADD SOMETHING FOR TIME TO NODE**
+
+	payload = ["TRACEROUTEEXT", $hostname, dst, 0].join(" ")
+	send("TRACEROUTEEXT", payload, dst)
+=begin PSUEDOCODE
+	It may just be best for this traceroute to fire off the
+	traceroute message and allow traceroute ext to handle most of the
+	work
+
+	maybe create an entry in a traceroute hash and allow tracertext
+	to handle filling it and then printing it when it gets the final
+	msg
+=end PSUEDOCODE
+end
+
+=begin
+tracerouteExt is the workhorse of the traceroute family. It is the control
+logic for either stopping or forwarding the traceroute command. It is also 
+in charge of replying to source or printing when done.
+=end
+def tracerouteExt(cmd)
+	STDOUT.puts "TRACEROUTEEXT called"
+	src = cmd[0]
+	dst = cmd[1]
+	hopCount = cmd[2].to_i
+	#if the trace has reached it's destination
+	if dst == $hostname
+		hopCount += 1
+		payload = ["TRACEROUTEEXT", src, dst, hopCount].join(" ")
+		send("TRACEROUTEEXT", payload, src)
+	#if the trace has made it's way back to the source
+	elsif src == $hostname 
+		$traceRoute[dst] << hopCount.to_s + " " + dst #ADDTIMESTUFF
+		
+		if $traceRoute.key?(dst)
+			$traceRoute[dst].each { |str| puts str }
+		end
+		#THE TRACE SHOULD BE DONE NOW MAYBE DELETE THE ROUTE
+
+	#otherwise it's an intermediate node
+	else
+		hopCount += 1 #increment hopCount
+		
+		#payload to be returned to sender
+		payload = ["TRACEROUTEEXT", src, $hostname, hopCount].join(" ")
+		send("TRACEROUTEEXT", payload, src)
+
+		#payload to be forwarded to destination
+		payload = ["TRACEROUTEEXT", src, dst, hopCount].join(" ")
+		send("TRACEROUTEEXT", payload,dst)
+	end
 end
 
 def ftp(cmd)
@@ -650,6 +739,7 @@ def executeCmdExt()
 		when "EDGEUEXT"; $linkBuffer << line#edgeuExt(args)
 		when "LSUEXT"; linkStateUpdateExt(args)
 		when "SENDMSGEXT"; sendmsgExt(args)
+		when "TRACEROUTEEXT"; tracerouteExt(args)
 		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
 	end
