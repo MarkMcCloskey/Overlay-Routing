@@ -1,6 +1,8 @@
 require 'thread'
 require 'socket'
 require 'csv'
+
+
 Thread::abort_on_exception = true
 
 # Properties for this node
@@ -679,8 +681,69 @@ def tracerouteExt(cmd)
 	end
 end
 
+=begin
+ftp will take an array of arguments in the form 
+[destination, filename, filepath] it will then transfer the filepath to the
+destination node and store it with filename.
+=end
 def ftp(cmd)
-	STDOUT.puts "FTP: not implemented"
+	STDOUT.puts "FTP called with cmd: " + cmd.to_s
+	dst = cmd[0] 		#get destination node
+	file = cmd[1]   	#get filename
+	path = cmd[2]   	#get filepath
+  	time = "IMPLEMENT TIMING"
+	speed = "IMPLEMENT TIMING"
+	size = "IMPLEMENT SIZING"
+	#opens file, should read whole thing, and close it
+	contents = File.read(file)
+
+	#load payload with filename, path, and the contents of file
+	#if this gets segmented will filename and filepath always
+	#be contained in the message? they will be necessary to open
+	#and store on the other end
+	payload = ["FTPEXT",file,path, $hostname, contents].join(" ")
+	send("FTPEXT",payload,dst)
+	
+	#IF SUCCESSFUL SIZESENT = SIZEOFCONTENTS
+	if(1)
+	STDOUT.puts "FTP " + file + " --> " + dst + " in " + time + " at " + speed
+	else
+	STDOUT.puts "FTP ERROR: " + file + " --> " + dst + " INTERRUPTED AFTER " + size
+	end
+	
+end
+
+=begin
+ftpExt will take an array of arguments in the form
+[filename, filepath, contents]. It will then save contents inside filename
+to the filepath.
+=end
+def ftpExt(cmd)
+	STDOUT.puts "FTPEXT called with cmd: " + cmd.to_s
+	name = cmd[0]		#get file name
+	path = cmd[1]		#get directory path
+	src = cmd[2]            #get src name
+	contents = cmd[3]	#get contents
+		
+	#if the directory doesn't already exist, create it
+	if( !Dir.exists?(path) )
+		Dir.mkdir(path)
+	end
+	Dir.chdir(path)		#change to the directory
+
+	# Starts writing at the current end of file. Is this a good idea?
+	# possible we should overwrite if already existing. Automated test
+	# may fail a diff if we just add to end?
+	
+	file = File.open(name,"a") # open, or create, a file for writing. 
+	file.puts(contents)
+	file.close		#close the file, cause good habits.
+
+	if(1)
+		STDOUT.puts "FTP: " + src + " -- > " + path + "/" + name
+	else
+		STDOUT.put "FTP ERROR: " + src + " --> " + path + "/" + name 
+	end
 end
 
 # --------------------- Part 3 --------------------- # 
@@ -760,6 +823,7 @@ def executeCmdExt()
 		when "LSUEXT"; linkStateUpdateExt(args)
 		when "SENDMSGEXT"; sendmsgExt(args)
 		when "TRACEROUTEEXT"; tracerouteExt(args)
+		when "FTPEXT"; ftpExt(args)
 		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
 	end
