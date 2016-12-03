@@ -595,20 +595,22 @@ Output will be in the following form:
 	For an unsuccessful reply -> timeout on hopcount
 =end
 def traceroute(cmd)
-	STDOUT.puts "TRACEROUTE called"
+	#STDOUT.puts "TRACEROUTE called with cmd: " + cmd.to_s
 	
 	dst = cmd[0]			#pull destination from argument
 	$traceRoute[dst] = Array.new	#create new route in hash
 	$traceRoute[dst] << "0 " + $hostname  #ADD TIME add source to hash
 
 	#create the payload. Payload will look like 
-	#[COMMAND, source, destination, hopcount]
+	#[COMMAND, source, destination, hopcount forward]
 	#Source so that all nodes know where to send their return packets
 	#destination so all nodes know where to forward traceroute
 	#hopcount so each can increment and reply correctly
+	#forward tells intermediate nodes wether to reply and forward
+	#or forward without reply
 	#  **NEED TO ADD SOMETHING FOR TIME TO NODE**
 
-	payload = ["TRACEROUTEEXT", $hostname, dst, 0].join(" ")
+	payload = ["TRACEROUTEEXT", $hostname, dst, 0,"time", "true"].join(" ")
 	send("TRACEROUTEEXT", payload, dst)
 =begin PSUEDOCODE
 	It may just be best for this traceroute to fire off the
@@ -627,35 +629,53 @@ logic for either stopping or forwarding the traceroute command. It is also
 in charge of replying to source or printing when done.
 =end
 def tracerouteExt(cmd)
-	STDOUT.puts "TRACEROUTEEXT called"
+	#STDOUT.puts "TRACEROUTEEXT called with cmd: " + cmd.to_s
 	src = cmd[0]
 	dst = cmd[1]
 	hopCount = cmd[2].to_i
+	time = cmd[3]
+	forward = cmd[4]
+
+	#MARK YOU DID A DIRTY DIRTY HACK WITH THE FORWARD THING
+	#CONSIDER BEING A DECENT HUMAN AND FIXING IT
+
+
 	#if the trace has reached it's destination
 	if dst == $hostname
 		hopCount += 1
-		payload = ["TRACEROUTEEXT", src, dst, hopCount].join(" ")
+
+		#send the reply and stop forwarding	
+		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname].join(" ")
 		send("TRACEROUTEEXT", payload, src)
+	
 	#if the trace has made it's way back to the source
-	elsif src == $hostname 
-		$traceRoute[dst] << hopCount.to_s + " " + dst #ADDTIMESTUFF
+	elsif src == $hostname
+		#puts "trying to add to hash with dst: " + dst
+		$traceRoute[dst] << hopCount.to_s + " " + forward + " " + time #ADDTIMESTUFF
 		
-		if $traceRoute.key?(dst)
-			$traceRoute[dst].each { |str| puts str }
+		if $traceRoute.key?(forward)
+			$traceRoute[forward].each { |str| puts str }
 		end
 		#THE TRACE SHOULD BE DONE NOW MAYBE DELETE THE ROUTE
 
+	
 	#otherwise it's an intermediate node
-	else
+	#and the trace isn't done yet
+	elsif forward == "true"
 		hopCount += 1 #increment hopCount
 		
 		#payload to be returned to sender
-		payload = ["TRACEROUTEEXT", src, $hostname, hopCount].join(" ")
+		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname].join(" ")
 		send("TRACEROUTEEXT", payload, src)
 
 		#payload to be forwarded to destination
-		payload = ["TRACEROUTEEXT", src, dst, hopCount].join(" ")
+		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward].join(" ")
 		send("TRACEROUTEEXT", payload,dst)
+	
+	#now the trace is done so just send the cmd back
+	else
+		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward ].join( " ")
+		send("TRACEROUTEEXT", payload ,src)
 	end
 end
 
