@@ -16,7 +16,7 @@ $timeout = 100000000000000000000000000
 $nextMsgId = 0 # ID used for each unique message created in THIS node
 $packetSize = 100000
 $nodeToPings = Hash.new #hash table to track pings goes from nodeName =>
-		        #array
+$ttl = 100		        #array
 $traceRoute = Hash.new
 DELTA_T = 0.5
 
@@ -104,7 +104,7 @@ def edgeb(cmd)
 
 	payload = ["EDGEBEXT",srcIp, $hostname].join(" ")
 
-	send("EDGEBEXT", payload, dst)
+	send("EDGEBEXT", payload, dst, cmd[-1])
 end
 
 def edgebExt(cmd)
@@ -332,8 +332,8 @@ def linkStateUpdate
 
 	$neighbor.each_key { |neighbor| 
 		#puts "SENDING LINK STATE UPDATES TO " + neighbor
-		payload = ["LSUEXT", payloadArr.join(","), $hostname].join(" ")
-		send("LSUEXT", payload, neighbor)
+		payload = ["LSUEXT", payloadArr.join(","), $hostname, "junk"].join(" ")
+		send("LSUEXT", payload, neighbor,"packetSwitching" )
 	}
 
 end
@@ -385,10 +385,6 @@ def linkStateUpdateExt(cmd)
 	}
 end
 
-def dijkstras
-	puts "Doing Dijkstras now"
-end
-
 
 # --------------------- Part 2 --------------------- # 
 =begin
@@ -399,23 +395,23 @@ the whole message cannot be sent, sendmsg will print an error.
 
 =end
 def sendmsg(cmd)
-	STDOUT.puts "SENDMSG called"
+	#STDOUT.puts "SENDMSG called"
 
 	dst = cmd[0]		#pull destination
 	msg = cmd[1]		#pull message
-	puts "Destination: " + dst + " Message: " + msg
+	#puts "Destination: " + dst + " Message: " + msg
 
 
 	payload = ["SENDMSGEXT", msg, $hostname].join(" ")
-	puts "Payload: " + payload.to_s
+	#puts "Payload: " + payload.to_s
 	size = payload.length	#pull size to check when sending
-	puts "Payload Size: " + size.to_s
+	#puts "Payload Size: " + size.to_s
 =begin
 	MARK, to ensure full message sent, make the send chain return
 	the number of bytes sent then catch it here and do a check
 =end
 
-	send("SENDMSGEXT", payload, dst)
+	send("SENDMSGEXT", payload, dst, cmd[-1])
 =begin PSUEDOCODE
 	This should be relatively simple with our implementation.
 	The only trouble should be timers.
@@ -438,8 +434,8 @@ def sendmsgExt(cmd)
 	#MARK PROBABLY NEED TO BUFFER THESE AND ENSURE THE FULL MESSAGE HAS
 	#ARRIVED BEFORE PRINTING MAYBE ADD TOTLEN
 	#DOES OUR IMPLEMENTATION HANDLE THIS?
-	
-	STDOUT.puts "SENDMSGEXT called"
+
+	#STDOUT.puts "SENDMSGEXT called"
 	msg = cmd[0]
 	src = cmd[1]
 
@@ -461,64 +457,65 @@ def ping(cmd)
 	dst = cmd[0]
 	numPings = cmd[1].to_i
 	delay = cmd[2].to_i
-	
+
 	#if the ping hash doesn't have an entry for dst, make one
 	#if !$nodeToPings[dst].member?
 	#	$nodeToPings[dst] = Array.new # array to hold ping timers
 	#end
 	#spawn a thread to keep track of time
 	Thread.new(dst,numPings,delay) { |dst,numPings,delay|
-		puts "In first thread"
-		puts dst
-		puts numPings
-		puts delay
-		
-		
+		#puts "In first thread"
+		#puts dst
+		#puts numPings
+		#puts delay
+
+
 		time = 0
-		sleepTime = delay/4
+		#sleepTime = delayi/4
+		sleepTime = delay
 		pingCounter = 0
 		#while we still have pings that need to be sent
 		while pingCounter < numPings
-			puts "pingCounter: " + pingCounter.to_s
+			#puts "pingCounter: " + pingCounter.to_s
 
 			sleep sleepTime
-			time += sleepTime
-			
+			#time += sleepTime
+
 			#time to send a ping packet
-			if(time % delay == 0)
-				
-				#spawn a thread the send the packet
-				#may be unecessary but might help keep time
-				#more accurately
-				Thread.new(pingCounter,dst) { |pingCounter,dst|
-					
-				puts "In second thread"
+			#if(time % delay == 0)
+
+			#spawn a thread the send the packet
+			#may be unecessary but might help keep time
+			#more accurately
+			Thread.new(pingCounter,dst) { |pingCounter,dst|
+
+				#puts "In second thread"
 				#puts pingCounter
-				puts "Destination: " + dst
-					
-					#get time being sent
-					#for comparison on return
-					#to calculate round trip time
-					sendTime = $clock.runTime
-					#MARK comment this and it breaks
-					sendTime = sendTime.round(3)	
-					#send the command, ACK, sendtime,
-					# Sequence #, destination and src
-					#as the payload
+				#puts "Destination: " + dst
 
-					#src may not be necessary if we 
-					#can parse from header
-					payload = ["PINGEXT", "ACK=0",sendTime, pingCounter, dst, $hostname].join(" ")
-				puts "Payload: " + payload.to_s	
-					send("PINGEXT",payload,dst)
+				#get time being sent
+				#for comparison on return
+				#to calculate round trip time
+				sendTime = $clock.runTime
+				#MARK comment this and it breaks
+				sendTime = sendTime.round(3)	
+				#send the command, ACK, sendtime,
+				# Sequence #, destination and src
+				#as the payload
 
-					#put the timer in the hash
-					#$nodeToPing[dst] << $pingTimeout
-					#start a timer decrementer thread?
-				}
-				
-				pingCounter += 1
-			end
+				#src may not be necessary if we 
+				#can parse from header
+				payload = ["PINGEXT", "ACK=0",sendTime, pingCounter, dst, $hostname].join(" ")
+				#puts "Payload: " + payload.to_s	
+				send("PINGEXT",payload,dst,cmd[-1])
+
+				#put the timer in the hash
+				#$nodeToPing[dst] << $pingTimeout
+				#start a timer decrementer thread?
+			}
+
+			pingCounter += 1
+			#end
 		end
 	}
 
@@ -549,19 +546,19 @@ pingExt will allow this node to handle the response from ping messages.
 def pingExt(cmd)
 	#this line pulls the ack out of the payload and converts it to int
 	#turns "ACK=X" -> x this int is needed for response decision logic
-	
-	
+
+
 	ack = cmd[0].partition("=")[2].to_i
-	puts"pingExt Called with Ack: " + ack.to_s + " " + "Command: " + cmd.to_s
+	#puts"pingExt Called with Ack: " + ack.to_s + " " + "Command: " + cmd.to_s
 	if(ack == 0)#send response to ping
 		sendTime = cmd[1] #pull time sent from payload
 		seqNum = cmd[2]	  #pull the sequence number from payload
 		dst = cmd[4]	  #pull return destination from payload
-	puts "In pingExt Ack=0"
-	puts "Dst: " + dst + " seqNum: " + seqNum + " sendTime: " + sendTime
-		
-		payload = ["PINGEXT", "ACK=1", sendTime, seqNum,dst, $hostname].join(" ")
-		send("PINGEXT",payload,dst)
+		#puts "In pingExt Ack=0"
+		#puts "Dst: " + dst + " seqNum: " + seqNum + " sendTime: " + sendTime
+
+		payload = ["PINGEXT", "ACK=1", sendTime, seqNum,dst, $hostname, "junk"].join(" ")
+		send("PINGEXT",payload,dst, "packetSwitching")
 
 	end
 	if(ack == 1)#print ping messages
@@ -571,7 +568,7 @@ def pingExt(cmd)
 
 		sendTime = cmd[1].to_f #pull sendTime and make it float
 		seqNum = cmd[2]	       #pull seqNum
-		dst = cmd[3]	       #pull the original destination
+		dst = cmd[4]	       #pull the original destination
 		rtt = $clock.runTime - sendTime
 		rtt = rtt.round(3)
 		puts seqNum + " " + dst + " " + rtt.to_s
@@ -598,7 +595,7 @@ Output will be in the following form:
 =end
 def traceroute(cmd)
 	#STDOUT.puts "TRACEROUTE called with cmd: " + cmd.to_s
-	
+
 	dst = cmd[0]			#pull destination from argument
 	$traceRoute[dst] = Array.new	#create new route in hash
 	$traceRoute[dst] << "0 " + $hostname  #ADD TIME add source to hash
@@ -612,8 +609,8 @@ def traceroute(cmd)
 	#or forward without reply
 	#  **NEED TO ADD SOMETHING FOR TIME TO NODE**
 
-	payload = ["TRACEROUTEEXT", $hostname, dst, 0,"time", "true"].join(" ")
-	send("TRACEROUTEEXT", payload, dst)
+	payload = ["TRACEROUTEEXT", $hostname, dst, 0,"time", "true", cmd[-1]].join(" ")
+	send("TRACEROUTEEXT", payload, dst, cmd[-1])
 =begin PSUEDOCODE
 	It may just be best for this traceroute to fire off the
 	traceroute message and allow traceroute ext to handle most of the
@@ -637,7 +634,7 @@ def tracerouteExt(cmd)
 	hopCount = cmd[2].to_i
 	time = cmd[3]
 	forward = cmd[4]
-
+	routing = cmd[-1]
 	#MARK YOU DID A DIRTY DIRTY HACK WITH THE FORWARD THING
 	#CONSIDER BEING A DECENT HUMAN AND FIXING IT
 
@@ -647,37 +644,37 @@ def tracerouteExt(cmd)
 		hopCount += 1
 
 		#send the reply and stop forwarding	
-		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname].join(" ")
-		send("TRACEROUTEEXT", payload, src)
-	
-	#if the trace has made it's way back to the source
+		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing].join(" ")
+		send("TRACEROUTEEXT", payload, src, routing)
+
+		#if the trace has made it's way back to the source
 	elsif src == $hostname
 		#puts "trying to add to hash with dst: " + dst
 		$traceRoute[dst] << hopCount.to_s + " " + forward + " " + time #ADDTIMESTUFF
-		
+
 		if $traceRoute.key?(forward)
 			$traceRoute[forward].each { |str| puts str }
 		end
 		#THE TRACE SHOULD BE DONE NOW MAYBE DELETE THE ROUTE
 
-	
-	#otherwise it's an intermediate node
-	#and the trace isn't done yet
+
+		#otherwise it's an intermediate node
+		#and the trace isn't done yet
 	elsif forward == "true"
 		hopCount += 1 #increment hopCount
-		
+
 		#payload to be returned to sender
-		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname].join(" ")
-		send("TRACEROUTEEXT", payload, src)
+		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing].join(" ")
+		send("TRACEROUTEEXT", payload, src, "packetSwitching")
 
 		#payload to be forwarded to destination
-		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward].join(" ")
-		send("TRACEROUTEEXT", payload,dst)
-	
-	#now the trace is done so just send the cmd back
+		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing].join(" ")
+		send("TRACEROUTEEXT", payload,dst, routing)
+
+		#now the trace is done so just send the cmd back
 	else
-		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward ].join( " ")
-		send("TRACEROUTEEXT", payload ,src)
+		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing ].join( " ")
+		send("TRACEROUTEEXT", payload ,src, routing)
 	end
 end
 
@@ -691,7 +688,7 @@ def ftp(cmd)
 	dst = cmd[0] 		#get destination node
 	file = cmd[1]   	#get filename
 	path = cmd[2]   	#get filepath
-  	time = "IMPLEMENT TIMING"
+	time = "IMPLEMENT TIMING"
 	speed = "IMPLEMENT TIMING"
 	size = "IMPLEMENT SIZING"
 	#opens file, should read whole thing, and close it
@@ -702,15 +699,15 @@ def ftp(cmd)
 	#be contained in the message? they will be necessary to open
 	#and store on the other end
 	payload = ["FTPEXT",file,path, $hostname, contents].join(" ")
-	send("FTPEXT",payload,dst)
-	
+	send("FTPEXT",payload,dst, cmd[-1])
+
 	#IF SUCCESSFUL SIZESENT = SIZEOFCONTENTS
 	if(1)
-	STDOUT.puts "FTP " + file + " --> " + dst + " in " + time + " at " + speed
+		STDOUT.puts "FTP " + file + " --> " + dst + " in " + time + " at " + speed
 	else
-	STDOUT.puts "FTP ERROR: " + file + " --> " + dst + " INTERRUPTED AFTER " + size
+		STDOUT.puts "FTP ERROR: " + file + " --> " + dst + " INTERRUPTED AFTER " + size
 	end
-	
+
 end
 
 =begin
@@ -724,7 +721,7 @@ def ftpExt(cmd)
 	path = cmd[1]		#get directory path
 	src = cmd[2]            #get src name
 	contents = cmd[3]	#get contents
-		
+
 	#if the directory doesn't already exist, create it
 	if( !Dir.exists?(path) )
 		Dir.mkdir(path)
@@ -734,7 +731,7 @@ def ftpExt(cmd)
 	# Starts writing at the current end of file. Is this a good idea?
 	# possible we should overwrite if already existing. Automated test
 	# may fail a diff if we just add to end?
-	
+
 	file = File.open(name,"a") # open, or create, a file for writing. 
 	file.puts(contents)
 	file.close		#close the file, cause good habits.
@@ -774,6 +771,7 @@ def executeCmdLin()
 		arr = line.split(' ')
 		cmd = arr[0]
 		args = arr[1..-1]
+		args << "packetSwitching"
 		case cmd
 		when "EDGEB"; edgeb(args)
 		when "EDGED"; $edgeBuffer << line #edged(args)
@@ -785,8 +783,10 @@ def executeCmdLin()
 		when "PING"; ping(args)
 		when "TRACEROUTE"; traceroute(args)
 		when "FTP"; ftp(args)
-		when "CIRCUIT"; circuit(args)
 		when "hostname"; puts $hostname
+		when "CIRCUITM"; circuitm(args)
+		when "CIRCUITB"; circuitb(args)
+		when "CIRCUITD"; circuitd(args)
 		when "updateInterval"; puts $updateInterval
 		when "maxPayload"; puts $maxPayload
 		when "pingTimeout"; puts $pingTimeout
@@ -795,6 +795,8 @@ def executeCmdLin()
 		when "startTime"; puts $clock.startTime
 		when "runTime"; puts $clock.runTime
 		when "port"; puts $port
+
+
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 
@@ -893,48 +895,53 @@ def processPackets()
 	checkPackets = false
 	#	loop do
 	while (!$recvBuffer.empty?)
-		checkPackets = true
 		#puts "data in recv buffer"
 		packet = $recvBuffer.delete_at(0)
-		src = getHeaderVal(packet,"src")
-		id = getHeaderVal(packet, "id").to_i
-		offset = getHeaderVal(packet, "offset").to_i
-		$packetHash[src][id][offset] = packet
-		#puts "Src: "+ src 
-		#puts "Id: " + id.to_s
-		#puts "Offset: " + offset.to_s
-		#puts "totLen: " + getHeaderVal(packet, "totLen") 
-	end
-	if checkPackets
-		$packetHash.each {|srcKey,srcHash|
-			srcHash.each {|idKey, idHash|
-				sum = 0
-				idHash.keys.sort.each {|k|
-					#puts"inside id hash"
-					packet = idHash[k]
-					totLen = getHeaderVal(packet, "totLen").to_i
-					sum = sum + getHeaderVal(packet, "len").to_i
+		#STDOUT.puts "Packet in process " + packet
+		if $hostname == getHeaderVal(packet,"dst") || getHeaderVal(packet, "cmd") == "TRACEROUTEEXT"
+			src = getHeaderVal(packet,"src")
+			id = getHeaderVal(packet, "id").to_i
+			offset = getHeaderVal(packet, "offset").to_i
+			$packetHash[src][id][offset] = packet	
+			checkPackets = true
+		elsif packet.length != 0
+			forwardPacket(packet)
+
+			#puts "Src: "+ src 
+			#puts "Id: " + id.to_s
+			#puts "Offset: " + offset.to_s
+			#puts "totLen: " + getHeaderVal(packet, "totLen") 
+		end
+		if checkPackets
+			$packetHash.each {|srcKey,srcHash|
+				srcHash.each {|idKey, idHash|
+					sum = 0
+					idHash.keys.sort.each {|k|
+						#puts"inside id hash"
+						packet = idHash[k]
+						totLen = getHeaderVal(packet, "totLen").to_i
+						sum = sum + getHeaderVal(packet, "len").to_i
+					}
+
+					if totLen!= nil && totLen == sum
+						#puts "totLen"
+						msg = reconstructMsg(idHash)
+						$extCmdBuffer << msg
+						$packetHash[srcKey].delete(idKey)
+
+					end
 				}
-
-				if totLen!= nil && totLen == sum
-					#puts "totLen"
-					msg = reconstructMsg(idHash)
-					$extCmdBuffer << msg
-					$packetHash[srcKey].delete(idKey)
-
-				end
 			}
-		}
-		checkPackets = false
+			checkPackets = false
+		end
+
+		#		$cmdExt = Thread.new do
+		#			getCmdExt()
+		#		end
+		#		$cmdExt.join
+		#	end
 	end
-
-	#		$cmdExt = Thread.new do
-	#			getCmdExt()
-	#		end
-	#		$cmdExt.join
-	#	end
 end
-
 =begin
 reconstructMsg will take a hashtable that contains offset -> packet
 it will go through every packet extracting the payload and it will combine
@@ -961,11 +968,12 @@ Send function for commands from this node's terminal NOT for commands from
 other nodes Fragments the payload, adds the IP header to each packet, and
 sends each packet to the next node
 =end
-def send(cmd, msg, dst)
+def send(cmd, msg, dst, routingType)
 	fragments = msg.chars.to_a.each_slice($maxPayload).to_a.map{|s|
 		s.join("")} #.to_s
 
-	packets = createPackets(cmd, fragments, dst, msg.length)
+
+	packets = createPackets(cmd, fragments, dst, msg.length,routingType )
 
 	packets.each { |p|
 		tcpSend(p, $nextHop[dst])
@@ -974,7 +982,7 @@ end
 
 # Appends header to each fragment
 # ADD ALL OF THE HEADER INFO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-def createPackets(cmd, fragments, dst, totLen)
+def createPackets(cmd, fragments, dst, totLen, routingType)
 	packets = []
 	fragOffset = 0
 	fragments.each { |f|
@@ -982,13 +990,13 @@ def createPackets(cmd, fragments, dst, totLen)
 		id = $nextMsgId
 		fragFlag = 0 # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
 		len = f.length
-		ttl = -1 # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
-		routingType = "packingSwitching" # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
+		#ttl = 100 # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
+		#	routingType = "packetSwitching" # MAKE THIS INTO VARIABLE FOR FUTURE PARTS
 		path = "none"
 
 
 		header = ["src="+src, "dst="+dst, "id="+id.to_s, "cmd="+cmd, "fragFlag="+fragFlag.to_s, "fragOffset="+fragOffset.to_s,
-	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+ttl.to_s, "routingType="+routingType, "path="+path].join(",")
+	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+$ttl.to_s, "routingType="+routingType, "path="+path].join(",")
 
 		p = header + ":" + f
 
@@ -1003,13 +1011,35 @@ def createPackets(cmd, fragments, dst, totLen)
 end
 
 # Function called by packet buffer processors
-def forwardPacket(packet,dst)
+def forwardPacket(packet)
 	#before you send possibly fragment
 	#and nextHopwould be incorrect if it's a circuit
 	#instead make it a variable and decide before this line
 	#where it's going
+	#STDOUT.puts packet
+	#STDOUT.puts getHeaderVal(packet,"routingType")
+	if getHeaderVal(packet, "routingType") == "packetSwitching"
+		dst = getHeaderVal(packet, "dst")
+		if $nextHop[dst]
+			nextDst = $nextHop[dst]
+		end
+	else
+		STDOUT.puts "JUAN IMPLEMENT CIRCUITS"
+	end
 
-	tcpSend(packet, $nextHop[dst])
+	#modify TTL field, don't look, it's ugly
+	if getHeaderVal(packet,"ttl").to_i - 1 > 0
+		header = packet.split(":")[0]
+		payload = packet.split(":")[1]
+		headerElements = header.split(",")
+		headerElements[8] = "ttl=" + (getHeaderVal(packet, "ttl").to_i - 1).to_s
+
+		tcpSend(packet, $nextHop[dst])
+	else
+		STDOUT.puts packet
+		STDOUT.puts "A PACKET DIED IN " + $hostname
+	end
+
 end
 
 # Function that actually calls the TCP function to send message

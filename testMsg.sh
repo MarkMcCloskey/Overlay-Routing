@@ -10,4 +10,18 @@ cat console_n1
 echo 
 cat console_n2
 
+echo --- RUNNING 3 NODE TEST ---
+ruby controller.rb nodes.txt config < msgTest3.in
+cat console_n1
+echo
+cat console_n3
+
+echo --- RUNNING 4 NODE TEST ---
+ruby controller.rb nodes.txt config < msgTest4.in
+echo Node 1 Console:
+cat console_n1
+echo
+echo Node 4 Console:
+cat console_n4
+
 echo --- TESTING COMPLETE --- 
