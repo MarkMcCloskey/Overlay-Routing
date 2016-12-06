@@ -6,19 +6,16 @@ echo --- RUNNING SIMPLE TWO NODE TEST ---
 ruby controller.rb pingNodes2.txt config < traceTest2.in
 
 cat console_n1
-echo 
-cat console_n2
 
 echo --- RUNNING TEST 3 ---
 ruby controller.rb traceNodes3.txt config < traceTest3.in
 
 echo Node 1 Console:
 cat console_n1
-echo
-echo Node 2 Console:
-cat console_n2
-echo 
-echo Node 3 Console:
-cat console_n3
 
+echo --- RUNNING TEST 4 BACK TO BACK TRACE ---
+ruby controller.rb traceNodes3.txt config < traceTest4.in
+
+echo Node 1 Console:
+cat console_n1
 echo --- TESTING COMPLETE --- 

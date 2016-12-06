@@ -18,6 +18,8 @@ $packetSize = 100000
 $nodeToPings = Hash.new #hash table to track pings goes from nodeName =>
 $ttl = 100		        #array
 $traceRoute = Hash.new
+$traceTimers = Hash.new
+
 DELTA_T = 0.5
 
 # Routing Table hashes
@@ -50,10 +52,10 @@ $timer
 $clock
 
 class Timer
-	DELTA_T = TENTH_SECOND = 0.1
+	DELTA_T = TENTH_SECOND = 0.001 
 	attr_accessor :startTime, :curTime
 	def initialize
-		@startTime = Time.new
+		@startTime = Time.new.to_f
 		@curTime = @startTime
 		@timeUpdater = Thread.new {
 			loop do
@@ -240,6 +242,7 @@ def status()
 		$port.to_s + " " + "Neighbors:" + " "
 
 	neighbors = $neighbor.keys
+	neighbors.sort!
 	neighbors = neighbors.join(",")
 	STDOUT.print neighbors
 	STDOUT.puts
@@ -459,9 +462,9 @@ def ping(cmd)
 	delay = cmd[2].to_i
 
 	#if the ping hash doesn't have an entry for dst, make one
-	#if !$nodeToPings[dst].member?
-	#	$nodeToPings[dst] = Array.new # array to hold ping timers
-	#end
+	if !$nodeToPings.key?(dst)
+		$nodeToPings[dst] = Array.new # array to hold ping timers
+	end
 	#spawn a thread to keep track of time
 	Thread.new(dst,numPings,delay) { |dst,numPings,delay|
 		#puts "In first thread"
@@ -469,6 +472,8 @@ def ping(cmd)
 		#puts numPings
 		#puts delay
 
+		#start a new thread that will go through and decrement all
+		#ping timers.
 
 		time = 0
 		#sleepTime = delayi/4
@@ -503,8 +508,19 @@ def ping(cmd)
 				# Sequence #, destination and src
 				#as the payload
 
+								
+				#get the array that's holding the ping
+				#timeout counters and put a new one in
+				#for the message about to be sent
+				arr = $nodeToPings[dst]
+				puts "Sending pings arr: " + arr.to_s
+				puts "Pingtimeout: " + $pingTimeout.to_s
+				arr[pingCounter] = $pingTimeout
+				puts arr.to_s
+				pingTracker(dst)
 				#src may not be necessary if we 
 				#can parse from header
+
 				payload = ["PINGEXT", "ACK=0",sendTime, pingCounter, dst, $hostname].join(" ")
 				#puts "Payload: " + payload.to_s	
 				send("PINGEXT",payload,dst,cmd[-1])
@@ -565,13 +581,20 @@ def pingExt(cmd)
 		#MARK NEED TO ADD LOGIC THAT CHECKS TO SEE IF PINGTIMEOUT
 		#HAS EXPIRED BEFORE YOU DO THIS
 
-
+		
 		sendTime = cmd[1].to_f #pull sendTime and make it float
 		seqNum = cmd[2]	       #pull seqNum
 		dst = cmd[4]	       #pull the original destination
+		
+		#check to make sure the ping hasn't timed out already
+		arr = $nodeToPings[dst]
+		if(arr[seqNum.to_i] != -1 )
+		
 		rtt = $clock.runTime - sendTime
 		rtt = rtt.round(3)
 		puts seqNum + " " + dst + " " + rtt.to_s
+		end
+		
 	end
 
 =begin PSUEDOCODE
@@ -582,6 +605,61 @@ else
 reply to sender with PING ACK
 =end PSUEDOCODE
 end
+
+=begin
+pingTracker takes a destination node and then starts tracking the timers
+for the pings to that node. If a timer expires it will print and error
+message.
+
+=end
+def pingTracker(dst)
+	#puts "Pingtracker called with dst" + dst.to_s
+	#spawn thread to track timers	
+	Thread.new(dst) { |dst|
+		#semi arbitrary number cause why not
+		num = $pingTimeout/4
+		
+		#suicide countdown for this thread
+		timer = 0
+
+		#MARK THIS IS A BAD LIMIT, DOESN'T ACCOUNT FOR NUMPINGS
+		#PASS NUMPINGS AS A PARAM AND ADD IT TO THE MULTIPLY
+		#ALSO MAYBE PINGDELAY... or maybe pass limit in
+		limit = 2*$pingTimeout
+
+		#sleep that magic number
+		sleep num
+		#puts "Pingtracker doing work"
+		
+		#thread getting closer to killing self
+		timer = timer + num
+
+		#get the array that corresponds to the stored ping timers
+		arr = $nodeToPings[dst]
+		#puts "arr: " + arr.to_s
+		#if the arr contains timers
+		if arr and timer < limit
+			#go through and decrement
+			arr.each_with_index { |clock, idx|
+				#puts "Clock: " + clock.to_s
+				arr[idx] =  clock - num
+	      			if clock < 0 or clock == 0 
+				STDOUT.puts "PING ERROR: HOST UNREACHABLE"
+	      			arr[idx] = -1
+				end 
+			}
+		else
+			#puts "pingtracker dying because " + timer.to_s
+			#puts arr
+			Thread.exit
+		end
+		
+
+	}
+
+end
+
+
 
 =begin
 
@@ -598,8 +676,13 @@ def traceroute(cmd)
 
 	dst = cmd[0]			#pull destination from argument
 	$traceRoute[dst] = Array.new	#create new route in hash
-	$traceRoute[dst] << "0 " + $hostname  #ADD TIME add source to hash
-
+	$traceRoute[dst] << "0 " + $hostname + " 0"  #ADD TIME add source to hash
+	
+	#make the next response a nil value for now. This is used for 
+	#if statement logic in other parts of the program
+	arr = $traceRoute[dst]
+	arr[1] = nil
+	
 	#create the payload. Payload will look like 
 	#[COMMAND, source, destination, hopcount forward]
 	#Source so that all nodes know where to send their return packets
@@ -607,10 +690,15 @@ def traceroute(cmd)
 	#hopcount so each can increment and reply correctly
 	#forward tells intermediate nodes wether to reply and forward
 	#or forward without reply
-	#  **NEED TO ADD SOMETHING FOR TIME TO NODE**
-
-	payload = ["TRACEROUTEEXT", $hostname, dst, 0,"time", "true", cmd[-1]].join(" ")
+	
+	time = $clock.curTime
+	#puts "Send time: " + time.to_s
+	payload = ["TRACEROUTEEXT", $hostname, dst, 0,time, "true", cmd[-1], ""].join(" ")
 	send("TRACEROUTEEXT", payload, dst, cmd[-1])
+	
+	#start a timer for the next response
+	$traceTimers[dst] = traceTimer(dst,1)
+
 =begin PSUEDOCODE
 	It may just be best for this traceroute to fire off the
 	traceroute message and allow traceroute ext to handle most of the
@@ -642,7 +730,12 @@ def tracerouteExt(cmd)
 	#if the trace has reached it's destination
 	if dst == $hostname
 		hopCount += 1
+		#puts "Sent time: " + time
+		#puts "Node time: " + $clock.curTime.to_s
 
+		#time = $clock.curTime - time.to_f
+		#puts "Time: " + time.to_s
+		#time = time.abs
 		#send the reply and stop forwarding	
 		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing].join(" ")
 		send("TRACEROUTEEXT", payload, src, routing)
@@ -650,13 +743,44 @@ def tracerouteExt(cmd)
 		#if the trace has made it's way back to the source
 	elsif src == $hostname
 		#puts "trying to add to hash with dst: " + dst
-		$traceRoute[dst] << hopCount.to_s + " " + forward + " " + time #ADDTIMESTUFF
+		
+		arr = $traceRoute[dst]
+	 	
+		#if the route is still viable process incoming packets,
+		#if not ignore them. This will pose problems if traceroute
+		#is called, a timeoute occurs on the first trace, then 
+		#a second traceroute is called while the original
+		#traceroute packets are still in the network.
 
+		if arr
+		
+		#timing stuff
+		time = $clock.curTime - time.to_f#subtract curtime minus
+						 #original sent time
+
+		time = time.abs/2 #take the absolute value of it and
+				  #divide by two. Assuming same time
+				  #trip each way
+		
+		time = time.round(4)#round to 4th digit passed zero
+				    #just to make it a little prettier
+
+		time = time.to_s    #printable string
+		
+		arr[hopCount] =  hopCount.to_s + " " + forward + " " + time #ADDTIMESTUFF
+		
+		#deal with the timer thread
+		$traceTimers[dst].terminate
+		$traceTimers[dst] = traceTimer(dst,hopCount += 1 )
+		
 		if $traceRoute.key?(forward)
+			$traceTimers[dst].terminate#kill timeout thread
+			$traceRoute[forward].sort#sort based off hopcount
 			$traceRoute[forward].each { |str| puts str }
+			$traceRoute.delete(dst)
+		end
 		end
 		#THE TRACE SHOULD BE DONE NOW MAYBE DELETE THE ROUTE
-
 
 		#otherwise it's an intermediate node
 		#and the trace isn't done yet
@@ -676,6 +800,46 @@ def tracerouteExt(cmd)
 		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing ].join( " ")
 		send("TRACEROUTEEXT", payload ,src, routing)
 	end
+end
+
+=begin
+traceTimer will take dst that is the destination node as a string and
+hopCount which is an integer telling what the next expected hop number is.
+It will then start a countdown timer that allows the next node in the 
+route to respond. If the node responds, the timer dies without needing to
+take any action. If the timer expires this function handles writing the
+error and printing the finished trace.
+=end
+def traceTimer(dst, hopCount)
+
+	thread = Thread.new(dst, hopCount) { |dst, hopCount|
+		#sleep for the timeout interval
+		sleep $pingTimeout
+		#pull array
+		arr = $traceRoute[dst]
+
+		#if someone has already put something in the array 
+		#we no longer need to keep time on it
+		#so kill the thread
+		if arr[hopCount]
+			Thread.exit
+		else
+			#since we've timed out the trace is done
+			#print what we have and stop
+			$traceRoute[dst].compact!#remove nil value at end
+			$traceRoute[dst].sort#sort based off hopcount
+			$traceRoute[dst].each { |str| puts str }
+			STDOUT.puts "Timeout on " + hopCount.to_s
+			
+			#make array nil, this is used for logical checks
+			$traceRoute[dst] = nil #elsewhere in the program
+						
+			#arr[hopCount] = "Timeout on " + hopCount.to_s
+			Thread.exit
+		end
+
+	}
+	thread#return the thread
 end
 
 =begin
@@ -1059,11 +1223,11 @@ def parseConfig(file)
 	File.foreach(file){ |line|
 		pieces = line.partition("=")
 		if pieces[0] == "updateInterval"
-			$updateInterval = pieces[2].to_i
+			$updateInterval = pieces[2].to_f
 		elsif pieces[0] == "maxPayload"
-			$maxPayload = pieces[2].to_i
+			$maxPayload = pieces[2].to_f
 		elsif pieces[0] == "pingTimeout"
-			$pingTimeout = pieces[2].to_i
+			$pingTimeout = pieces[2].to_f
 		end
 	}
 end
@@ -1105,6 +1269,7 @@ def main()
 
 	$execute = Thread.new do
 		while 1
+			sleep 0.5
 			processPackets
 			executeCmdExt
 			executeCmdLin

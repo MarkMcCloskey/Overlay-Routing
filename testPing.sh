@@ -20,4 +20,8 @@ echo --- TEST 5 4 NODE TEST ---
 ruby controller.rb pingNodes3.txt config < pingTest5.in
 cat console_n1
 
+echo --- TEST 6 TIMEOUT CASE ---
+ruby controller.rb pingNodes3.txt config < pingTest6.in
+cat console_n1
+
 echo --- TESTING COMPLETE --- 
