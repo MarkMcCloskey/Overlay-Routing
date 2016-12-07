@@ -292,7 +292,7 @@ def emptyLinkBuffer
 
 	#while(!$linkBuffer.empty?)
 	while(!arr.empty?)	
-		line = $linkBuffer.delete_at(0)
+		line = arr.delete_at(0)
 		line = line.strip()
 
 		arr = line.split(' ')
@@ -315,7 +315,7 @@ def emptyEdgeBuffer
 
 	#while(!$edgeBuffer.empty?)
 	while(!arr.empty?)
-		line = $edgeBuffer.delete_at(0)
+		line = arr.delete_at(0)
 		line = line.strip()
 		arr = line.split(' ')
 		cmd = arr[0]
@@ -419,7 +419,7 @@ def sendmsg(cmd)
 	#puts "Destination: " + dst + " Message: " + msg
 
 
-	payload = ["SENDMSGEXT", msg, $hostname "jwan"].join(" ")
+	payload = ["SENDMSGEXT", msg, $hostname, "jwan"].join(" ")
 	#puts "Payload: " + payload.to_s
 	size = payload.length	#pull size to check when sending
 	#puts "Payload Size: " + size.to_s
@@ -806,7 +806,7 @@ def tracerouteExt(cmd)
 		hopCount += 1 #increment hopCount
 
 		#payload to be returned to sender
-		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing "jwan"].join(" ")
+		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing, "jwan"].join(" ")
 		send("TRACEROUTEEXT", payload, src, "packetSwitching", "-1")
 
 		#payload to be forwarded to destination
@@ -815,7 +815,7 @@ def tracerouteExt(cmd)
 
 		#now the trace is done so just send the cmd back
 	else
-		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routingi, "jwan" ].join( " ")
+		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing, "jwan" ].join( " ")
 		send("TRACEROUTEEXT", payload ,src, "packetSwitching","-1")
 	end
 end
@@ -982,9 +982,11 @@ executeCmdLin will take all the buffered commands from the command line
 and execute them.
 =end
 def executeCmdLin()
+	temp = $cmdLinBuffer.clone
+	$cmdLinBuffer = Array.new
 
-	while(!$cmdLinBuffer.empty?)
-		line = $cmdLinBuffer.delete_at(0)
+	while(!temp.empty?)
+		line = temp.delete_at(0)
 		line = line.strip()
 		arr = line.split(' ')
 		cmd = arr[0]
@@ -1031,7 +1033,6 @@ def executeCmdExt()
 
 		line = $extCmdBuffer.delete_at(0)
 		line = line.strip()
-
 		arr = line.split(' ')
 		cmd = arr[0]
 		args = arr[1..-2]
@@ -1101,7 +1102,9 @@ def serverThread()
 						#read what the connection
 						#has
 						#puts "putting data in buffer"
-						$recvBuffer << sock.gets()
+						buffer = sock.gets("jwan")
+						$recvBuffer << buffer
+						#$recvBuffer << sock.gets()
 						#str = sock.readlines(nil)
 						#puts "In server str: " + str[0]
 						#$recvBuffer << sock.recv($packetSize)
