@@ -19,7 +19,7 @@ $nodeToPings = Hash.new #hash table to track pings goes from nodeName =>
 $ttl = 100		        #array
 $traceRoute = Hash.new
 $traceTimers = Hash.new
-
+$circuit = Hash.new
 DELTA_T = 0.5
 
 # Routing Table hashes
@@ -104,9 +104,9 @@ def edgeb(cmd)
 	$cost[dst] = 1
 	$neighbor[dst] = true
 
-	payload = ["EDGEBEXT",srcIp, $hostname].join(" ")
+	payload = ["EDGEBEXT",srcIp, $hostname, "jwan"].join(" ")
 
-	send("EDGEBEXT", payload, dst, cmd[-1])
+	send("EDGEBEXT", payload, dst, cmd[-2], cmd[-1])
 end
 
 def edgebExt(cmd)
@@ -349,8 +349,8 @@ def linkStateUpdate
 
 	$neighbor.each_key { |neighbor| 
 		#puts "SENDING LINK STATE UPDATES TO " + neighbor
-		payload = ["LSUEXT", payloadArr.join(","), $hostname, "junk"].join(" ")
-		send("LSUEXT", payload, neighbor,"packetSwitching" )
+		payload = ["LSUEXT", payloadArr.join(","), $hostname, "jwan"].join(" ")
+		send("LSUEXT", payload, neighbor,"packetSwitching", "-1" )
 	}
 
 end
@@ -419,7 +419,7 @@ def sendmsg(cmd)
 	#puts "Destination: " + dst + " Message: " + msg
 
 
-	payload = ["SENDMSGEXT", msg, $hostname].join(" ")
+	payload = ["SENDMSGEXT", msg, $hostname "jwan"].join(" ")
 	#puts "Payload: " + payload.to_s
 	size = payload.length	#pull size to check when sending
 	#puts "Payload Size: " + size.to_s
@@ -428,7 +428,7 @@ def sendmsg(cmd)
 	the number of bytes sent then catch it here and do a check
 =end
 
-	send("SENDMSGEXT", payload, dst, cmd[-1])
+	send("SENDMSGEXT", payload, dst, cmd[-2], cmd[-1])
 =begin PSUEDOCODE
 	This should be relatively simple with our implementation.
 	The only trouble should be timers.
@@ -535,9 +535,9 @@ def ping(cmd)
 				#src may not be necessary if we 
 				#can parse from header
 
-				payload = ["PINGEXT", "ACK=0",sendTime, pingCounter, dst, $hostname].join(" ")
+				payload = ["PINGEXT", "ACK=0",sendTime, pingCounter, dst, $hostname, "jwan"].join(" ")
 				#puts "Payload: " + payload.to_s	
-				send("PINGEXT",payload,dst,cmd[-1])
+				send("PINGEXT",payload,dst,cmd[-2],cmd[-1])
 
 				#put the timer in the hash
 				#$nodeToPing[dst] << $pingTimeout
@@ -587,8 +587,8 @@ def pingExt(cmd)
 		#puts "In pingExt Ack=0"
 		#puts "Dst: " + dst + " seqNum: " + seqNum + " sendTime: " + sendTime
 
-		payload = ["PINGEXT", "ACK=1", sendTime, seqNum,dst, $hostname, "junk"].join(" ")
-		send("PINGEXT",payload,dst, "packetSwitching")
+		payload = ["PINGEXT", "ACK=1", sendTime, seqNum,dst, $hostname, "jwan"].join(" ")
+		send("PINGEXT",payload,dst, "packetSwitching", "-1")
 
 	end
 	if(ack == 1)#print ping messages
@@ -709,8 +709,8 @@ def traceroute(cmd)
 
 	time = $clock.curTime
 	#puts "Send time: " + time.to_s
-	payload = ["TRACEROUTEEXT", $hostname, dst, 0,time, "true", cmd[-1], ""].join(" ")
-	send("TRACEROUTEEXT", payload, dst, cmd[-1])
+	payload = ["TRACEROUTEEXT", $hostname, dst, 0,time, "true", cmd[-1], "jwan"].join(" ")
+	send("TRACEROUTEEXT", payload, dst, cmd[-2], cmd[-1])
 
 	#start a timer for the next response
 	$traceTimers[dst] = traceTimer(dst,1)
@@ -738,7 +738,9 @@ def tracerouteExt(cmd)
 	hopCount = cmd[2].to_i
 	time = cmd[3]
 	forward = cmd[4]
-	routing = cmd[-1]
+	routing = cmd[-2]
+	circuitId = cmd[-1]
+
 	#MARK YOU DID A DIRTY DIRTY HACK WITH THE FORWARD THING
 	#CONSIDER BEING A DECENT HUMAN AND FIXING IT
 
@@ -753,8 +755,8 @@ def tracerouteExt(cmd)
 		#puts "Time: " + time.to_s
 		#time = time.abs
 		#send the reply and stop forwarding	
-		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing].join(" ")
-		send("TRACEROUTEEXT", payload, src, routing)
+		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing, "jwan"].join(" ")
+		send("TRACEROUTEEXT", payload, src, "packetSwitching", "-1")
 
 		#if the trace has made it's way back to the source
 	elsif src == $hostname
@@ -804,17 +806,17 @@ def tracerouteExt(cmd)
 		hopCount += 1 #increment hopCount
 
 		#payload to be returned to sender
-		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing].join(" ")
-		send("TRACEROUTEEXT", payload, src, "packetSwitching")
+		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing "jwan"].join(" ")
+		send("TRACEROUTEEXT", payload, src, "packetSwitching", "-1")
 
 		#payload to be forwarded to destination
-		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing].join(" ")
-		send("TRACEROUTEEXT", payload,dst, routing)
+		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing, "jwan"].join(" ")
+		send("TRACEROUTEEXT", payload,dst, routing, circuitId)
 
 		#now the trace is done so just send the cmd back
 	else
-		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing ].join( " ")
-		send("TRACEROUTEEXT", payload ,src, routing)
+		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routingi, "jwan" ].join( " ")
+		send("TRACEROUTEEXT", payload ,src, "packetSwitching","-1")
 	end
 end
 
@@ -878,10 +880,10 @@ def ftp(cmd)
 	#be contained in the message? they will be necessary to open
 	#and store on the other end
 	
-	payload = ["FTPEXT",file,path, $hostname, "0", time,size, contents].join(" ")
+	payload = ["FTPEXT",file,path, $hostname, "0", time,size, contents, "jwan"].join(" ")
 	STDOUT.puts "Calling ftp with: " + payload.to_s
 	#STDOUT.puts "done printing"
-	send("FTPEXT",payload,dst, cmd[-1])
+	send("FTPEXT",payload,dst, cmd[-2], cmd[-1])
 
 	#IF SUCCESSFUL SIZESENT = SIZEOFCONTENTS
 
@@ -920,9 +922,9 @@ def ftpExt(cmd)
 		file.close		#close the file, cause good habits.
 
 		#get message to send back for timing
-		payload = ["FTPEXT",name, $hostname, time,"1",size, "junk"].join(" ")
+		payload = ["FTPEXT",name, $hostname, time,"1",size, "jwan" ].join(" ")
 		#puts "Payload: " + payload.to_s
-		send("FTPEXT",payload,src, "packetSwitching")
+		send("FTPEXT",payload,src, "packetSwitching" , "-1")
 
 
 		if(1)
@@ -1032,7 +1034,7 @@ def executeCmdExt()
 
 		arr = line.split(' ')
 		cmd = arr[0]
-		args = arr[1..-1]
+		args = arr[1..-2]
 
 		case cmd
 		when "PINGEXT"; pingExt(args)
@@ -1198,12 +1200,12 @@ Send function for commands from this node's terminal NOT for commands from
 other nodes Fragments the payload, adds the IP header to each packet, and
 sends each packet to the next node
 =end
-def send(cmd, msg, dst, routingType)
+def send(cmd, msg, dst, routingType, circuitId)
 	fragments = msg.chars.to_a.each_slice($maxPayload).to_a.map{|s|
 		s.join("")} #.to_s
 
 
-	packets = createPackets(cmd, fragments, dst, msg.length,routingType )
+	packets = createPackets(cmd, fragments, dst, msg.length,routingType, circuitId )
 
 	packets.each { |p|
 		tcpSend(p, $nextHop[dst])
@@ -1212,7 +1214,7 @@ end
 
 # Appends header to each fragment
 # ADD ALL OF THE HEADER INFO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-def createPackets(cmd, fragments, dst, totLen, routingType)
+def createPackets(cmd, fragments, dst, totLen, routingType, circuitId)
 	packets = []
 	fragOffset = 0
 	fragments.each { |f|
@@ -1226,7 +1228,7 @@ def createPackets(cmd, fragments, dst, totLen, routingType)
 
 
 		header = ["src="+src, "dst="+dst, "id="+id.to_s, "cmd="+cmd, "fragFlag="+fragFlag.to_s, "fragOffset="+fragOffset.to_s,
-	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+$ttl.to_s, "routingType="+routingType, "path="+path].join(",")
+	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+$ttl.to_s, "routingType="+routingType, "circuitId="+circuitId,"circuitTok="+"0"].join(",")
 
 		p = header + ":" + f
 
