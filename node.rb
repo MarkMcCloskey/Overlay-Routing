@@ -180,7 +180,9 @@ def edged(cmd)
 	dst = cmd[0] #get destination from args
 
 	#shutdown and delete the socket connecting the nodes
-	$nodeToSocket[dst].shutdown 
+	if $nodeToSocket[dst]
+		$nodeToSocket[dst].shutdown
+	end
 	$nodeToSocket.delete(dst)
 
 	#remove destination from all the hashes tracking it
@@ -283,7 +285,13 @@ end
 cycle through all the link state packets and apply them to the graph
 =end
 def emptyLinkBuffer
-	while(!$linkBuffer.empty?)
+	#make a deep copy of the array and then make a new link buffer
+	#so that there's no additions to the arrays during clearing
+	arr = $linkBuffer.clone
+	$linkBuffer = Array.new
+
+	#while(!$linkBuffer.empty?)
+	while(!arr.empty?)	
 		line = $linkBuffer.delete_at(0)
 		line = line.strip()
 
@@ -300,7 +308,13 @@ end
 cycle through all the edge updating commands and apply them to the graph
 =end
 def emptyEdgeBuffer
-	while(!$edgeBuffer.empty?)
+	#make a deep copy of the array and then make a new edgeBuffer so
+	#that there's no additions to the array during clearing.
+	arr = $edgeBuffer.clone
+	$edgeBuffer = Array.new
+
+	#while(!$edgeBuffer.empty?)
+	while(!arr.empty?)
 		line = $edgeBuffer.delete_at(0)
 		line = line.strip()
 		arr = line.split(' ')
@@ -508,15 +522,15 @@ def ping(cmd)
 				# Sequence #, destination and src
 				#as the payload
 
-								
+
 				#get the array that's holding the ping
 				#timeout counters and put a new one in
 				#for the message about to be sent
 				arr = $nodeToPings[dst]
-				puts "Sending pings arr: " + arr.to_s
-				puts "Pingtimeout: " + $pingTimeout.to_s
+				#puts "Sending pings arr: " + arr.to_s
+				#puts "Pingtimeout: " + $pingTimeout.to_s
 				arr[pingCounter] = $pingTimeout
-				puts arr.to_s
+				#puts arr.to_s
 				pingTracker(dst)
 				#src may not be necessary if we 
 				#can parse from header
@@ -581,20 +595,20 @@ def pingExt(cmd)
 		#MARK NEED TO ADD LOGIC THAT CHECKS TO SEE IF PINGTIMEOUT
 		#HAS EXPIRED BEFORE YOU DO THIS
 
-		
+
 		sendTime = cmd[1].to_f #pull sendTime and make it float
 		seqNum = cmd[2]	       #pull seqNum
 		dst = cmd[4]	       #pull the original destination
-		
+
 		#check to make sure the ping hasn't timed out already
 		arr = $nodeToPings[dst]
-		if(arr[seqNum.to_i] != -1 )
-		
-		rtt = $clock.runTime - sendTime
-		rtt = rtt.round(3)
-		puts seqNum + " " + dst + " " + rtt.to_s
+		if(arr[seqNum.to_i] != nil )
+			arr[seqNum.to_i] = nil
+			rtt = $clock.runTime - sendTime
+			rtt = rtt.round(3)
+			puts seqNum + " " + dst + " " + rtt.to_s
 		end
-		
+
 	end
 
 =begin PSUEDOCODE
@@ -618,7 +632,7 @@ def pingTracker(dst)
 	Thread.new(dst) { |dst|
 		#semi arbitrary number cause why not
 		num = $pingTimeout/4
-		
+
 		#suicide countdown for this thread
 		timer = 0
 
@@ -630,7 +644,7 @@ def pingTracker(dst)
 		#sleep that magic number
 		sleep num
 		#puts "Pingtracker doing work"
-		
+
 		#thread getting closer to killing self
 		timer = timer + num
 
@@ -642,18 +656,20 @@ def pingTracker(dst)
 			#go through and decrement
 			arr.each_with_index { |clock, idx|
 				#puts "Clock: " + clock.to_s
-				arr[idx] =  clock - num
-	      			if clock < 0 or clock == 0 
-				STDOUT.puts "PING ERROR: HOST UNREACHABLE"
-	      			arr[idx] = -1
-				end 
+				if arr[idx] != nil
+					arr[idx] =  clock - num
+					if clock < 0 or clock == 0 
+						STDOUT.puts "PING ERROR: HOST UNREACHABLE"
+						arr[idx] = nil
+					end 
+				end
 			}
 		else
 			#puts "pingtracker dying because " + timer.to_s
 			#puts arr
 			Thread.exit
 		end
-		
+
 
 	}
 
@@ -677,12 +693,12 @@ def traceroute(cmd)
 	dst = cmd[0]			#pull destination from argument
 	$traceRoute[dst] = Array.new	#create new route in hash
 	$traceRoute[dst] << "0 " + $hostname + " 0"  #ADD TIME add source to hash
-	
+
 	#make the next response a nil value for now. This is used for 
 	#if statement logic in other parts of the program
 	arr = $traceRoute[dst]
 	arr[1] = nil
-	
+
 	#create the payload. Payload will look like 
 	#[COMMAND, source, destination, hopcount forward]
 	#Source so that all nodes know where to send their return packets
@@ -690,12 +706,12 @@ def traceroute(cmd)
 	#hopcount so each can increment and reply correctly
 	#forward tells intermediate nodes wether to reply and forward
 	#or forward without reply
-	
+
 	time = $clock.curTime
 	#puts "Send time: " + time.to_s
 	payload = ["TRACEROUTEEXT", $hostname, dst, 0,time, "true", cmd[-1], ""].join(" ")
 	send("TRACEROUTEEXT", payload, dst, cmd[-1])
-	
+
 	#start a timer for the next response
 	$traceTimers[dst] = traceTimer(dst,1)
 
@@ -743,9 +759,9 @@ def tracerouteExt(cmd)
 		#if the trace has made it's way back to the source
 	elsif src == $hostname
 		#puts "trying to add to hash with dst: " + dst
-		
+
 		arr = $traceRoute[dst]
-	 	
+
 		#if the route is still viable process incoming packets,
 		#if not ignore them. This will pose problems if traceroute
 		#is called, a timeoute occurs on the first trace, then 
@@ -753,32 +769,32 @@ def tracerouteExt(cmd)
 		#traceroute packets are still in the network.
 
 		if arr
-		
-		#timing stuff
-		time = $clock.curTime - time.to_f#subtract curtime minus
-						 #original sent time
 
-		time = time.abs/2 #take the absolute value of it and
-				  #divide by two. Assuming same time
-				  #trip each way
-		
-		time = time.round(4)#round to 4th digit passed zero
-				    #just to make it a little prettier
+			#timing stuff
+			time = $clock.curTime - time.to_f#subtract curtime minus
+			#original sent time
 
-		time = time.to_s    #printable string
-		
-		arr[hopCount] =  hopCount.to_s + " " + forward + " " + time #ADDTIMESTUFF
-		
-		#deal with the timer thread
-		$traceTimers[dst].terminate
-		$traceTimers[dst] = traceTimer(dst,hopCount += 1 )
-		
-		if $traceRoute.key?(forward)
-			$traceTimers[dst].terminate#kill timeout thread
-			$traceRoute[forward].sort#sort based off hopcount
-			$traceRoute[forward].each { |str| puts str }
-			$traceRoute.delete(dst)
-		end
+			time = time.abs/2 #take the absolute value of it and
+			#divide by two. Assuming same time
+			#trip each way
+
+			time = time.round(4)#round to 4th digit passed zero
+			#just to make it a little prettier
+
+			time = time.to_s    #printable string
+
+			arr[hopCount] =  hopCount.to_s + " " + forward + " " + time #ADDTIMESTUFF
+
+			#deal with the timer thread
+			$traceTimers[dst].terminate
+			$traceTimers[dst] = traceTimer(dst,hopCount += 1 )
+
+			if $traceRoute.key?(forward)
+				$traceTimers[dst].terminate#kill timeout thread
+				$traceRoute[forward].sort#sort based off hopcount
+				$traceRoute[forward].each { |str| puts str }
+				$traceRoute.delete(dst)
+			end
 		end
 		#THE TRACE SHOULD BE DONE NOW MAYBE DELETE THE ROUTE
 
@@ -830,10 +846,10 @@ def traceTimer(dst, hopCount)
 			$traceRoute[dst].sort#sort based off hopcount
 			$traceRoute[dst].each { |str| puts str }
 			STDOUT.puts "Timeout on " + hopCount.to_s
-			
+
 			#make array nil, this is used for logical checks
 			$traceRoute[dst] = nil #elsewhere in the program
-						
+
 			#arr[hopCount] = "Timeout on " + hopCount.to_s
 			Thread.exit
 		end
@@ -848,29 +864,26 @@ ftp will take an array of arguments in the form
 destination node and store it with filename.
 =end
 def ftp(cmd)
-	STDOUT.puts "FTP called with cmd: " + cmd.to_s
+	#STDOUT.puts "FTP called with cmd: " + cmd.to_s
 	dst = cmd[0] 		#get destination node
 	file = cmd[1]   	#get filename
 	path = cmd[2]   	#get filepath
-	time = "IMPLEMENT TIMING"
-	speed = "IMPLEMENT TIMING"
+	time = $clock.curTime.round(4)
 	size = "IMPLEMENT SIZING"
 	#opens file, should read whole thing, and close it
 	contents = File.read(file)
-
-	#load payload with filename, path, and the contents of file
+	size = contents.length
+	#load payload with filename, path, and the contents of file, ACK
 	#if this gets segmented will filename and filepath always
 	#be contained in the message? they will be necessary to open
 	#and store on the other end
-	payload = ["FTPEXT",file,path, $hostname, contents].join(" ")
+	
+	payload = ["FTPEXT",file,path, $hostname, "0", time,size, contents].join(" ")
+	STDOUT.puts "Calling ftp with: " + payload.to_s
+	#STDOUT.puts "done printing"
 	send("FTPEXT",payload,dst, cmd[-1])
 
 	#IF SUCCESSFUL SIZESENT = SIZEOFCONTENTS
-	if(1)
-		STDOUT.puts "FTP " + file + " --> " + dst + " in " + time + " at " + speed
-	else
-		STDOUT.puts "FTP ERROR: " + file + " --> " + dst + " INTERRUPTED AFTER " + size
-	end
 
 end
 
@@ -881,31 +894,70 @@ to the filepath.
 =end
 def ftpExt(cmd)
 	STDOUT.puts "FTPEXT called with cmd: " + cmd.to_s
-	name = cmd[0]		#get file name
-	path = cmd[1]		#get directory path
-	src = cmd[2]            #get src name
-	contents = cmd[3]	#get contents
+	ack = cmd[3]
 
-	#if the directory doesn't already exist, create it
-	if( !Dir.exists?(path) )
-		Dir.mkdir(path)
-	end
-	Dir.chdir(path)		#change to the directory
+	if( ack == "0" )
+		name = cmd[0]		#get file name
+		path = cmd[1]		#get directory path
+		src = cmd[2]            #get src name
+		time = cmd[4]
+		size = cmd[5]
+		contents = cmd[6]	#get contents
 
-	# Starts writing at the current end of file. Is this a good idea?
-	# possible we should overwrite if already existing. Automated test
-	# may fail a diff if we just add to end?
 
-	file = File.open(name,"a") # open, or create, a file for writing. 
-	file.puts(contents)
-	file.close		#close the file, cause good habits.
+		#if the directory doesn't already exist, create it
+		if( !Dir.exists?(path) )
+			Dir.mkdir(path)
+		end
+		Dir.chdir(path)		#change to the directory
 
-	if(1)
-		STDOUT.puts "FTP: " + src + " -- > " + path + "/" + name
+		# Starts writing at the current end of file. Is this a good idea?
+		# possible we should overwrite if already existing. Automated test
+		# may fail a diff if we just add to end?
+
+		file = File.open(name,"w") # open, or create, a file for writing. 
+		file.puts(contents)
+		file.close		#close the file, cause good habits.
+
+		#get message to send back for timing
+		payload = ["FTPEXT",name, $hostname, time,"1",size, "junk"].join(" ")
+		#puts "Payload: " + payload.to_s
+		send("FTPEXT",payload,src, "packetSwitching")
+
+
+		if(1)
+			STDOUT.puts "FTP: " + src + " -- > " + path + "/" + name
+		else
+			STDOUT.put "FTP ERROR: " + src + " --> " + path + "/" + name 
+		end
+
+	elsif(ack == "1")
+		file = cmd[0]
+		dst = cmd[1]
+		time = cmd[2]
+		size = cmd[4]
+
+		time = time.to_f
+		size = size.to_f
+
+		
+		sendTime = $clock.curTime - time
+		
+
+		speed = size/sendTime
+		sendTime = sendTime.round(4)
+		speed = speed.round(4)
+		if(1)
+			STDOUT.puts "FTP " + file + " --> " + dst + " in " + sendTime.to_s + " at " + speed.to_s
+		else
+			STDOUT.puts "FTP ERROR: " + file + " --> " + dst + " INTERRUPTED AFTER " + size
+		end
 	else
-		STDOUT.put "FTP ERROR: " + src + " --> " + path + "/" + name 
+		STDOUT.puts "something went wrong"
 	end
-end
+
+	end
+
 
 # --------------------- Part 3 --------------------- # 
 def circuit(cmd)
@@ -1024,6 +1076,18 @@ def serverThread()
 					#if the connection is over
 					if sock.eof? then
 						#close it
+						#puts "Sock: " + sock.to_s
+						#puts $nodeToSocket.to_s
+						#MARK CALL EDGED
+						#because a connection
+						#no longer exist so the 
+						#node is no longer 
+						#a neighbor
+
+						#	edged(nextHop)
+
+						#nextHop = $nodeToSocket.key(sock)
+						#$edgeBuffer << "EDGED " + nextHop 	
 						sock.close
 
 						$serverConnections.delete(serverConnection)
@@ -1035,7 +1099,9 @@ def serverThread()
 						#read what the connection
 						#has
 						#puts "putting data in buffer"
-						$recvBuffer << sock.gets
+						$recvBuffer << sock.gets()
+						#str = sock.readlines(nil)
+						#puts "In server str: " + str[0]
 						#$recvBuffer << sock.recv($packetSize)
 						#puts "data should be in the buff"
 						#puts $recvBuffer[-1]
@@ -1120,7 +1186,7 @@ packet. Sort puts them in order of offset and then reassembles all the
 packets
 =end
 	packetHash.keys.sort.each { |offset,val| 
-		msg += packetHash[offset].split(":")[1]
+		msg += packetHash[offset].partition(":")[2]
 	}
 
 	return msg
@@ -1193,11 +1259,12 @@ def forwardPacket(packet)
 
 	#modify TTL field, don't look, it's ugly
 	if getHeaderVal(packet,"ttl").to_i - 1 > 0
-		header = packet.split(":")[0]
-		payload = packet.split(":")[1]
+		header = packet.partition(":")[0]
+		payload = packet.partition(":")[2]
 		headerElements = header.split(",")
 		headerElements[8] = "ttl=" + (getHeaderVal(packet, "ttl").to_i - 1).to_s
-
+		headerElements = headerElements.join(",")
+		packet = header + ":" + payload
 		tcpSend(packet, $nextHop[dst])
 	else
 		STDOUT.puts packet
@@ -1212,9 +1279,23 @@ def tcpSend(packet, nextHop)
 	socket = $nodeToSocket[nextHop]
 	#puts "trying to send"
 	#puts socket
-	socket.puts(packet)
-	#socket.send(packet, packet.size)
-	#puts "sent"
+
+	#attempt 
+	if packet != nil #weird check that shouldn't be needed but is 
+		#because of our code for some reason
+
+		begin
+			socket.puts(packet) #attempt to send
+
+		rescue	#if sending fails the connection is broken and the neighbor
+			#no longer exists
+			#	edged(nextHop)
+			STDOUT.puts "Node Died"
+			$edgeBuffer << "EDGED EDGED " + nextHop 	
+		end
+		#socket.send(packet, packet.size)
+		#puts "sent"
+	end
 end
 
 # ---------------- Helper Functions ----------------- #
@@ -1241,7 +1322,7 @@ def parseNodes(file)
 end
 
 def getHeaderVal(packet,key)
-	header = packet.split(":")[0]
+	header = packet.partition(":")[0]
 	return header.scan(/#{key}=([^,]*)/).flatten[0]
 end
 

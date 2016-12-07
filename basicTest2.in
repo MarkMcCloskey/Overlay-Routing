@@ -1,0 +1,11 @@
+CONTROLLER SLEEP 5
+NODE n1 updateInterval
+NODE n1 maxPayload
+NODE n1 pingTimeout
+NODE n1 nodesToPort
+NODE n1 curTime
+NODE n1 startTime
+NODE n1 runTime
+NODE n1 port
+CONTROLLER SLEEP 3
+CONTROLLER SHUTDOWN
