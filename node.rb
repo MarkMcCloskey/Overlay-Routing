@@ -1449,7 +1449,19 @@ def forwardPacket(packet)
 			nextDst = $nextHop[dst]
 		end
 	elsif getHeaderVal(packet, "routingType") == "circuitSwitching"
-		
+		circuitId = getHeaderVal(packet, "circuitId")
+		circuitTkn = getHeaderVal(packet, "circuitTkn").to_i + 1
+
+		nextDst = $circuit[circuitId][circuitTknt]
+
+		header = packet.partition(":")[0]
+		payload = packet.partition(":")[2]
+		headerElements = header.split(",")
+		headerElements[11] = "circuitTkn=" + circuitTkn.to_s
+		headerElements = headerElements.join(",")
+		packet = header + ":" + payload
+	else
+		STDOUT.puts "SOMETHING WENT WRONG IN FORWARD PACKETS. HEADER VALUE FOR ROUTINGTYPE IS INCORRECT"
 	end
 
 	#modify TTL field, don't look, it's ugly
