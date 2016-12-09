@@ -1150,6 +1150,8 @@ end
 
 def circuitD(cmd)
 	circuitId = cmd[0]
+
+
 end
 
 # --------------------- Threads --------------------- #
@@ -1446,8 +1448,8 @@ def forwardPacket(packet)
 		if $nextHop[dst]
 			nextDst = $nextHop[dst]
 		end
-	else
-		STDOUT.puts "JUAN IMPLEMENT CIRCUITS"
+	elsif getHeaderVal(packet, "routingType") == "circuitSwitching"
+		
 	end
 
 	#modify TTL field, don't look, it's ugly
