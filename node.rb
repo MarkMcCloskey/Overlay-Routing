@@ -962,8 +962,194 @@ def ftpExt(cmd)
 
 
 # --------------------- Part 3 --------------------- # 
-def circuit(cmd)
-	STDOUT.puts "CIRCUIT: not implemented"
+# JUAN ADDED: FUCK JUST REALZIZED THAT THE OUTPUT FOR CIRCUITM NEEDS TO HAVE
+# EXTRA OUTPUT BESIDES THE REGULAR OUTPUT FROM THE OTHER REGULAR FUNCTIONS.
+# REMEMBER TO ADD CIRCUITTYPE ARGUMENT TO EVERY PAYLOAD UNDER FUNCTIONS 
+# UNDER CIRCUITM :(
+
+
+# These functions for circtuiB contains two parts:
+# 	1. Checks if the circuit is possible. 
+# 	This would go through every node in the circuit.
+# 	If it reaches the dst node, the dst node sends an ack 
+# 	using packetSwithing (cause circuit is one way) to the src
+#  	telling it is possible to build the circuit
+# 	Else if it doesn't reach the dst and stops at a mid node,
+# 	that mid node should send an ack back to the src telling it
+# 	failed at the mid node.
+#  	2. If from part 1, src receives a positive ack, then it builds
+# 	the path by sending a string of all the nodes in the circuit and
+# 	stripping them off as it goes through the circuit. 
+# 	Else if it received a negative ack, then just output a ERROR message
+
+# Sends the circuit path check message to the next node in the circuit.
+# If there the next node is not a neigbhor then print the error message. 
+def circuitB(cmd)
+	circuitId = cmd[0]
+	dst = cmd[1]
+	circuit = cmd[2].split(",")
+	fullCircuit = circuit.map do |e| e.dup end
+	circuit.push(dst) 
+
+	if $circuit.has_key?(circuitId)
+		STDOUT.puts "CIRCUIT ERROR: " + $hostname + " -/-> " + dst + " FAILED AT " + $hostname	
+		STDOUT.puts "This circuit error was due to one of the nodes already having a circuit with the same ID " + circuitId
+		return
+	end
+
+	if circuit.empty?
+		STDOUT.puts "DAFUQ. WHY DID YOU GIVE ME AN EMPTY CIRCUIT?"
+		return
+	end
+
+	nextNode = circuit.delete_at(0)
+
+	if $neighbor[nextNode]
+		# Send payload
+		payload = ["CIRCUITBEXTCHECK", circuitId, $hostname, dst, circuit.join(","), fullCircuit.join(","), "jwan"].join(" ")
+		send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
+	else
+		STDOUT.puts "CIRCUIT ERROR: " + $hostname + " -/-> " + dst + " FAILED AT " + $hostname	
+	end
+end
+
+# This is an intermediate node for circuitBCheck. 
+def circuitBExtCheck(cmd)
+	circuitId = cmd[0]
+	src = cmd[1]
+	dst = cmd[2]
+	circuit = cmd[3].split(",")
+	fullCircuit = cmd[4].split(",")
+
+	if $circuit.has_key?(circuitId)
+		payload = ["CIRCUITBEXTERROR", circuitId, src, dst, $hostname, "jwan"]
+		send("CIRCUITBEXTCHECKERROR", payload, src, "packetSwitching" , "-1")
+		STDOUT.puts "The following circuit error was due to one of the nodes already having a circuit with the same ID " + circuitId
+		return
+	end
+
+	if circuit.empty? && dst == $hostname
+		# Send positive acknowledgement back to src
+		payload = ["CIRCUITBEXTCHECKPOS", circuitId, src, dst, fullCircuit.join(","), fullCircuit.join(","), "jwan"]
+		send("CIRCUITBEXTCHECKPOS", payload, src, "packetSwitching" , "-1")
+	elsif circuit.empty? && dst != $hostname
+		STDOUT.puts "JUAN ERROR! WE FINISHED THE CIRCUIT PATH BUT SOMEONE DID NOT MANAGE TO END AT DST"
+	else
+		nextNode = circuit.delete_at(0)
+		if $neighbor[nextNode]
+			# Send payload
+			payload = ["CIRCUITBEXTCHECK", circuitId, src, dst, circuit.join(","), fullCircuit.join(","), "jwan"].join(" ")
+			send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
+		else
+			# Send a negative acknowledgement back to src with this node's name ($hostname)
+			payload = ["CIRCUITBEXTERROR", circuitId, src, dst, $hostname, "jwan"]
+			send("CIRCUITBEXTCHECKERROR", payload, src, "packetSwitching" , "-1")
+		end
+	end 
+end
+
+def circuitBExtError(cmd) 
+	circuitId = cmd[0]
+	src = cmd[1]
+	dst = cmd[2]
+	fNode = cmd[3]
+
+	STDOUT.puts "CIRCUIT ERROR: " + src + " -/-> " + dst + " FAILED AT " + fNode
+end
+
+def circuitBExtCheckPos(cmd)
+	circuitId = cmd[0]
+	src = cmd[1]
+	dst = cmd[2]
+	circuit = cmd[3].split(",")
+	fullCircuit = cmd[4].split(",")
+
+	circuitTkn = 0
+
+	circuit.push(dst)
+
+	nextNode = circuit.delete_at(0)
+
+	if $neighbor[nextNode]
+		# Send payload
+		$circuit[circuitId][circuitTkn] = nextNode
+		payload = ["CIRCUITBEXTBUILD", circuitId, circuitTkn.to_s, $hostname, dst, circuit.join(","), fullCircuit.join(","), "jwan"].join(" ")
+		send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
+	else
+		STDOUT.puts "SHIT! " + $hostname + " to " + nextNode + " was disconnected while processing circuitB."
+		STDOUT.puts "Note: This does not delete the circuit hashes from previous nodes."
+	end
+end
+
+def circuitBExtBuild(cmd)
+	circuitId = cmd[0]
+	circuitTkn = cmd[1].to_i + 1
+	src = cmd[2]
+	dst = cmd[3]
+	circuit = cmd[4].split(",")
+	fullCircuit = cmd[5].split(",")
+
+	hops = fullCircuit.length
+	
+	if circuit.empty? && dst == $hostname
+		#Send pos ack to src
+		STDOUT.puts "CIRCUIT " + src + "/" + circuitId + " --> " + dst + " over " + hops.to_s
+		payload = ["CIRCUITBEXTBUILDPOS", circuitId, src, dst, fullCircuit.join(","), "jwan"]
+		send("CIRCUITBEXTCHECKPOS", payload, src, "packetSwitching" , "-1")
+		return 
+	end
+
+	nextNode = circuit.delete_at(0)
+
+	if $neighbor[nextNode]
+		# Send payload
+		$circuit[circuitId][circuitTkn] = nextNode
+		payload = ["CIRCUITBEXTBUILD", circuitId, circuitTkn.to_s, $hostname, dst, circuit.join(","), "jwan"].join(" ")
+		send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
+	else
+		STDOUT.puts "SHIT! " + $hostname + " to " + nextNode + " was disconnected while processing circuitB."
+		STDOUT.puts "Note: This does not delete the circuit hashes from previous nodes."
+	end
+
+end
+
+def circuitBExtBuildPos(cmd)
+	circuitId = cmd[0]
+	src = cmd[1]
+	dst = cmd[2]
+	fullCircuit = cmd[3]
+
+	hops = fullCircuit.length
+
+	if src != $hostname
+		STDOUT.puts "WHERE DAFUQ AM I?"
+		return
+	end
+
+	STDOUT.puts "CIRCUITB " + circuitId + " --> " + dst + " over " + hops.to_s
+end
+
+def circuitM(cmd)
+	circuitId = cmd[0]
+	line = cmd[1] # JUAN MAKE SURE THESE DONT HAVE QUOTATION MARKS
+
+	line = line.strip()
+
+	arr = line.split(' ') # CHANGE THIS TO THE REGEX !!!!!
+	cmd = arr[0]
+	args = arr[1..-1]
+	args << "circuitSwitching"
+	case cmd
+		when "SENDMSG"; sendmsg(args)
+		when "PING"; ping(args)
+		when "TRACEROUTE"; traceroute(args)
+		when "FTP"; ftp(args)
+		else STDERR.puts "ERROR: INVALID COMMAND in circuitM \"#{cmd}\""
+	end
+end
+
+def circuitD(cmd)
+	circuitId = cmd[0]
 end
 
 # --------------------- Threads --------------------- #
@@ -1014,7 +1200,6 @@ def executeCmdLin()
 		when "runTime"; puts $clock.runTime
 		when "port"; puts $port
 
-
 		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 
@@ -1044,6 +1229,11 @@ def executeCmdExt()
 		when "SENDMSGEXT"; sendmsgExt(args)
 		when "TRACEROUTEEXT"; tracerouteExt(args)
 		when "FTPEXT"; ftpExt(args)
+		when "CIRCUITBEXTCHECK"; circuitBExtCheck(args)
+		when "CIRCUITBEXTCHECKPOS"; circuitBExtCheckPos(args)
+		when "CIRCUITBEXTERROR"; circuitBExtError(args)
+		when "CIRCUITBEXTBUILD"; circuitBExtBuild(args)
+		when "CIRCUITBEXTBUILDPOS"; circuitBExtBuildPos(args)
 		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
 	end
@@ -1130,7 +1320,8 @@ def processPackets()
 		#puts "data in recv buffer"
 		packet = $recvBuffer.delete_at(0)
 		#STDOUT.puts "Packet in process " + packet
-		if $hostname == getHeaderVal(packet,"dst") || getHeaderVal(packet, "cmd") == "TRACEROUTEEXT"
+		if ($hostname == getHeaderVal(packet,"dst") || getHeaderVal(packet, "cmd") == "TRACEROUTEEXT" 
+			|| getHeaderVal(packet, "cmd") == "CIRCUITBEXTCHECK" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTBUILD" )
 			src = getHeaderVal(packet,"src")
 			id = getHeaderVal(packet, "id").to_i
 			offset = getHeaderVal(packet, "offset").to_i
