@@ -939,7 +939,7 @@ ftp will take an array of arguments in the form
 destination node and store it with filename.
 =end
 def ftp(cmd)
-	#STDOUT.puts "FTP called with cmd: " + cmd.to_s
+	STDOUT.puts "FTP called with cmd: " + cmd.to_s
 	dst = cmd[0] 		#get destination node
 	file = cmd[1]   	#get filename
 	path = cmd[2]   	#get filepath
@@ -947,7 +947,7 @@ def ftp(cmd)
 	size = "IMPLEMENT SIZING"
 
 	routingType = cmd[-2]
-	path = cmd[-1]
+	circuitId = cmd[-1]
 	#opens file, should read whole thing, and close it
 	contents = IO.binread(file)
 	#contents = File.read(file)
@@ -960,7 +960,7 @@ def ftp(cmd)
 	payload = ["FTPEXT",file,path, $hostname, "0", time,size, contents, "jwan"].join(" ")
 	STDOUT.puts "Calling ftp with: " + payload.to_s
 	#STDOUT.puts "done printing"
-	send("FTPEXT",payload,dst, routingType, path)
+	send("FTPEXT",payload,dst, routingType, circuitId)
 
 	#IF SUCCESSFUL SIZESENT = SIZEOFCONTENTS
 
@@ -1026,9 +1026,9 @@ def ftpExt(cmd)
 
 		speed = size/sendTime
 		sendTime = sendTime.round(4)
-		speed = speed.round(4)
+		speed = speed.to_i
 		if(1)
-			STDOUT.puts "FTP " + file + " --> " + dst + " in " + sendTime.to_s + " at " + speed.to_s
+			STDOUT.puts "FTP " + file + " --> " + dst + " in " + sendTime.to_s + " seconds" + " at " + speed.to_s + "Bps"
 		else
 			STDOUT.puts "FTP ERROR: " + file + " --> " + dst + " INTERRUPTED AFTER " + size
 		end
@@ -1405,6 +1405,8 @@ def serverThread()
 						#puts "putting data in buffer"
 						buffer = sock.gets("jwan")
 					 	if buffer != nil	
+						puts "SERVERGOT: " + buffer
+						puts	
 						$recvBuffer << buffer
 						end
 						#$recvBuffer << sock.gets()
@@ -1465,6 +1467,8 @@ def processPackets()
 					if totLen!= nil && totLen == sum
 						#puts "totLen"
 						msg = reconstructMsg(idHash)
+						puts "MSG: " + msg.to_s
+						puts 
 						$extCmdBuffer << msg
 						$packetHash[srcKey].delete(idKey)
 
