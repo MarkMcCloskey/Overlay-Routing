@@ -457,7 +457,7 @@ def sendmsg(cmd)
 	sendThis = "mork" + msg.to_s + "mork"
 
 	payload = ["SENDMSGEXT","0", sendThis, $hostname,dst, "jwan"].join(" ")
-	puts "Payload: " + payload.to_s
+	#puts "Payload: " + payload.to_s
 	size = payload.length	#pull size to check when sending
 	#puts "Payload Size: " + size.to_s
 =begin
@@ -511,7 +511,7 @@ def sendmsgExt(cmd)
 		#payload is [COMMAND, ACK, DONTCARE, SOURCE, STUFFEDCHAR]
 		payload = ["SENDMSGEXT","1","junk",$hostname,"jwan"].join(" ")
 
-		send("SENDMSGEXT",payload,dst,"packetSwitching","-1")
+		send("SENDMSGEXT",payload,src,"packetSwitching","-1")
 
 		#if another node is ACK'ing your message turn timer off
 	elsif(ack == "1")
@@ -532,7 +532,7 @@ message.
 def msgTracker(dst)
 
 
-	sleepyTime = $pingTimeout/4 #generic time to sleep
+	sleepyTime = $pingTimeout 
 
 	#new thread to do the tracking
 	Thread.new(dst,sleepyTime) { |dst, sleepyTime|
@@ -969,7 +969,7 @@ ftp will take an array of arguments in the form
 destination node and store it with filename.
 =end
 def ftp(cmd)
-	#STDOUT.puts "FTP called with cmd: " + cmd.to_s
+	STDOUT.puts "FTP called with cmd: " + cmd.to_s
 	dst = cmd[0] 		#get destination node
 	file = cmd[1]   	#get filename
 	path = cmd[2]   	#get filepath
@@ -979,16 +979,17 @@ def ftp(cmd)
 	routingType = cmd[-2]
 	circuitId = cmd[-1]
 	#opens file, should read whole thing, and close it
-	contents = IO.binread(file)
-	#contents = File.read(file)
+	#contents = IO.binread(file)
+	contents = File.read(file)
 	size = contents.length
 	#load payload with filename, path, and the contents of file, ACK
 	#if this gets segmented will filename and filepath always
 	#be contained in the message? they will be necessary to open
 	#and store on the other end
 
+	contents = "mork" + contents + "mork"
 	payload = ["FTPEXT",file,path, $hostname, "0", time,size, contents, "jwan"].join(" ")
-	#STDOUT.puts "Calling ftp with: " + payload.to_s
+	STDOUT.puts "Calling ftp with: " + payload.to_s
 	#STDOUT.puts "done printing"
 	send("FTPEXT",payload,dst, routingType, circuitId)
 
@@ -1002,7 +1003,7 @@ ftpExt will take an array of arguments in the form
 to the filepath.
 =end
 def ftpExt(cmd)
-	#STDOUT.puts "FTPEXT called with cmd: " + cmd.to_s
+	STDOUT.puts "FTPEXT called with cmd: " + cmd.to_s
 	ack = cmd[3]
 
 	if( ack == "0" )
@@ -1012,7 +1013,7 @@ def ftpExt(cmd)
 		time = cmd[4]
 		size = cmd[5]
 		contents = cmd[6]	#get contents
-
+		contents = contents.gsub("mork","")
 
 		#if the directory doesn't already exist, create it
 		if( !Dir.exists?(path) )
@@ -1024,14 +1025,14 @@ def ftpExt(cmd)
 		# possible we should overwrite if already existing. Automated test
 		# may fail a diff if we just add to end?
 
-		#file = File.open(name,"w") # open, or create, a file for writing. 
-		#file.puts(contents)
-		#file.close		#close the file, cause good habits.
+		file = File.open(name,"w") # open, or create, a file for writing. 
+		file.puts(contents)
+		file.close		#close the file, cause good habits.
 
-		IO.binwrite(name,contents)
+		#IO.binwrite(name,contents)
 		#get message to send back for timing
 		payload = ["FTPEXT",name, $hostname, time,"1",size, "jwan" ].join(" ")
-		#puts "Payload: " + payload.to_s
+		puts "Payload: " + payload.to_s
 		send("FTPEXT",payload,src, "packetSwitching" , "-1")
 
 
@@ -1395,7 +1396,7 @@ def executeCmdExt()
 
 		line = $extCmdBuffer.delete_at(0)
 		line = line.strip()
-		puts "GETCMDEXT called with: " + line
+		#puts "GETCMDEXT called with: " + line
 =begin		
 		arr = line.split(' ')
 		cmd = arr[0]
@@ -1514,7 +1515,7 @@ end
 
 def processPackets()
 	totLen = nil
-	checkPackets = false
+	checkPackets = nil
 	#	loop do
 	while (!$recvBuffer.empty?)
 		#puts "data in recv buffer"
@@ -1559,7 +1560,7 @@ def processPackets()
 					end
 				}
 			}
-			checkPackets = false
+			checkPackets = nil
 		end
 
 		#		$cmdExt = Thread.new do

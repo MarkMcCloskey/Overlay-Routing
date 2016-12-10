@@ -60,13 +60,18 @@ cat console_n2
 echo
 echo --- RUNNING FAR MSG TEST ----
 ruby controller.rb bigGraphNodes.txt quickConfig < msgTest8.in
-echo	NODE 1 CONSOLEi
+echo	NODE 1 CONSOLE
 cat console_n1
 echo	NODE 11 CONSOLE
 cat console_n11
 
 echo
 echo --- RUNNING LONG MESSAGE TEST ---
+ruby controller.rb pingNodes2.txt config < msgTest9.in
+echo NODE 1 CONSOLE
+cat console_n1
+echo NODE 2 CONSOLE
+cat console_n2
 
 
 

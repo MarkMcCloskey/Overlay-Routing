@@ -28,7 +28,13 @@ cat console_n2
 
 echo
 echo --- RUNNING BIG FILE TEST ---
-echo
+ruby controller.rb pingNodes2.txt config < ftpTest4.in
+echo CONSOLE N1
+cat console_n1
+
+echo CONSOLE N2
+cat console_n2
+
 
 echo
 echo --- RUNNING FAR FTP TEST ---
