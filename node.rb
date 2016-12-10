@@ -934,6 +934,7 @@ def traceTimer(dst, hopCount)
 
 	thread = Thread.new(dst, hopCount) { |dst, hopCount|
 		#sleep for the timeout interval
+		
 		sleep $pingTimeout
 		#pull array
 		arr = $traceRoute[dst]
@@ -941,7 +942,7 @@ def traceTimer(dst, hopCount)
 		#if someone has already put something in the array 
 		#we no longer need to keep time on it
 		#so kill the thread
-		if arr[hopCount]
+		if $traceRoute[dst][hopCount]
 			Thread.exit
 		else
 			#since we've timed out the trace is done
