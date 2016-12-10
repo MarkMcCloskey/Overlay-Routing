@@ -36,4 +36,4 @@ echo
 
 
 
-echo --- TESTING COMPLETE --- 
+echo --- FTP TESTING COMPLETE --- 

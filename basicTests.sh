@@ -41,4 +41,4 @@ ruby controller.rb bigGraphNodes.txt config < bigGraph.in
 echo
 
 echo
-echo --- TESTING COMPLETE --- 
+echo --- BASIC TESTING COMPLETE --- 

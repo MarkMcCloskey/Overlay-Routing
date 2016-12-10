@@ -730,7 +730,7 @@ def pingTracker(dst, pingCounter, limit)
 	#spawn thread to track timers	
 	Thread.new(dst,pingCounter) { |dst, pingCounter|
 		#semi arbitrary number cause why not
-		num = $pingTimeout/4
+		num = $pingTimeout
 
 		#suicide countdown for this thread
 		timer = 0
@@ -872,7 +872,7 @@ def tracerouteExt(cmd)
 		#a second traceroute is called while the original
 		#traceroute packets are still in the network.
 
-		if arr
+		if $traceRoute[dst]
 
 			#timing stuff
 			time = $clock.curTime - time.to_f#subtract curtime minus
@@ -887,7 +887,7 @@ def tracerouteExt(cmd)
 
 			time = time.to_s    #printable string
 
-			arr[hopCount] =  hopCount.to_s + " " + forward + " " + time #ADDTIMESTUFF
+			$traceRoute[dst][hopCount] =  hopCount.to_s + " " + forward + " " + time #ADDTIMESTUFF
 
 			#deal with the timer thread
 			$traceTimers[dst].terminate
@@ -1375,7 +1375,7 @@ def executeCmdLin()
 		when "runTime"; puts $clock.runTime
 		when "port"; puts $port
 
-		else STDERR.puts "ERROR: INVALID COMMAND \"#{cmd}\""
+		else STDOUT.puts "ERROR: INVALID COMMAND \"#{cmd}\""
 		end
 
 	end
@@ -1394,6 +1394,7 @@ def executeCmdExt()
 
 		line = $extCmdBuffer.delete_at(0)
 		line = line.strip()
+		puts "GETCMDEXT called with: " + line
 =begin		
 		arr = line.split(' ')
 		cmd = arr[0]
@@ -1409,7 +1410,7 @@ def executeCmdExt()
 		cmd = newArr[0]
 		args = newArr[1..-1]
 		#args << "packetSwitching"
-		#puts "CmdLinExtCmd+Args: "cmd  + args.to_s
+		#puts "CmdLinExtCmd+Args: " + cmd  + args.to_s
 		#=end
 		case cmd
 		when "PINGEXT"; pingExt(args)
@@ -1426,7 +1427,7 @@ def executeCmdExt()
 		when "CIRCUITBEXTBUILDPOS"; circuitBExtBuildPos(args)
 		when "CIRCUITDEXT"; circuitDExt(args)
 		when "CIRCUITDEXTERROR"; circuitDExtError(args)
-		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
+		else STDOUT.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
 	end
 end

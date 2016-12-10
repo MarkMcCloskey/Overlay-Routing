@@ -36,4 +36,4 @@ echo	N11 CONSOLE
 cat console_n11
 
 
-echo --- TESTING COMPLETE --- 
+echo --- PING TESTING COMPLETE --- 

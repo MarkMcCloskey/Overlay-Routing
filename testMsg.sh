@@ -71,4 +71,4 @@ echo --- RUNNING LONG MESSAGE TEST ---
 
 
 echo
-echo --- TESTING COMPLETE --- 
+echo --- MSG TESTING COMPLETE --- 

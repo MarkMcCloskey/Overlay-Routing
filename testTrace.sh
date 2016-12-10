@@ -23,4 +23,4 @@ cat console_n1
 
 
 echo
-echo --- TESTING COMPLETE --- 
+echo --- TRACE TESTING COMPLETE --- 
