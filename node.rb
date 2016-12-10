@@ -22,7 +22,7 @@ $traceTimers = Hash.new
 $sendMsgTimers = Hash.new
 $circuit = Hash.new
 $circuitDst = Hash.new
-DELTA_T = 0.5
+DELTA_T = 0.01
 
 # Routing Table hashes
 # NOTE: Does not contain data for currently 
@@ -44,6 +44,8 @@ $packetHash = Hash.new { |h1, k1| h1[k1] =  Hash.new { # Buffer used to make pac
 	|h2, k2| h2[k2] =  Hash.new}} # packetHash[src][id][offset]
 
 # Threads
+$linkState
+$clearELBuffs
 $execute
 $cmdLin
 $cmdExt
@@ -101,7 +103,7 @@ def edgeb(cmd)
 	#create a connection with the new neighbor and save the 
 	#socket in the hash
 	#puts "trying to connect"
-	sleep(1)
+	sleep(0.05)
 	$nodeToSocket[dst] = TCPSocket.open(dstIp, $nodeToPort[dst])
 	#puts "tcp connected"
 	#puts $nodeToSocket[dst]
@@ -265,10 +267,13 @@ this action.
 def keepTime
 	time = 0
 	loop do
-		sleep(DELTA_T)
-		time += DELTA_T
+		sleep(0.1)
+		time += 0.1
 		#every update Interval flood link state packets
 		if(time % $updateInterval == 0)
+			#MARK MAKE LINKSTATE MORE EFFICIENT BY RUNNING
+			#WHENEVER IT RECIEVES A PACKET OR DURING TIME
+			if($linkState.alive?)
 			Thread.new do
 				linkStateUpdate
 			end
@@ -277,7 +282,7 @@ def keepTime
 		#let link state packets settle for half an interval
 		#then apply them to graph
 		#then apply edged edgeu updates to graph
-		if(time % (1.5*$updateInterval) == 0)
+		if( (time % (1.5*$updateInterval)).floor == 0)
 			Thread.new do
 				emptyLinkBuffer
 				emptyEdgeBuffer
@@ -293,12 +298,12 @@ def emptyLinkBuffer
 	#make a deep copy of the array and then make a new link buffer
 	#so that there's no additions to the arrays during clearing
 	
-	arr = $linkBuffer.clone
-	$linkBuffer = Array.new
+	#arr = $linkBuffer.clone
+	#$linkBuffer = Array.new
 
 	#while(!$linkBuffer.empty?)
-	while(!arr.empty?)	
-		line = arr.delete_at(0)
+	while(!$linkBuffer.empty?)	
+		line = $linkBuffer.delete_at(0)
 		line = line.strip()
 
 		arr = line.split(' ')
@@ -316,16 +321,17 @@ cycle through all the edge updating commands and apply them to the graph
 def emptyEdgeBuffer
 	#make a deep copy of the array and then make a new edgeBuffer so
 	#that there's no additions to the array during clearing.
-	arr = $edgeBuffer.clone
-	$edgeBuffer = Array.new
+	#arr = $edgeBuffer.clone
+	#$edgeBuffer = Array.new
 
 	#while(!$edgeBuffer.empty?)
-	while(!arr.empty?)
-		line = arr.delete_at(0)
+	while(!$edgeBuffer.empty?)
+		line = $edgeBuffer.delete_at(0)
 		line = line.strip()
 		arr = line.split(' ')
 		cmd = arr[0]
 		args = arr[1..-1]
+		#puts "EDGEBUFF: " + cmd + args.to_s
 		case cmd
 		when "EDGED";edged(args)
 		when "EDGEU";edgeu(args)
@@ -418,19 +424,19 @@ the whole message cannot be sent, sendmsg will print an error.
 
 =end
 def sendmsg(cmd)
-	#STDOUT.puts "SENDMSG called"
+	STDOUT.puts "SENDMSG called with" + cmd.to_s
 
 	dst = cmd[0]		#pull destination
-	msg = cmd[1]		#pull message
+	msg = cmd[1..-3].join(" ")            #pull message
 	routingType = cmd[-2]
 	path = cmd[-1]
 	#puts "Destination: " + dst + " Message: " + msg
 
 	#stuff the escape characters
-	sendThis = "mork" + msg + "mork"
+	sendThis = "mork" + msg.to_s + "mork"
 
 	payload = ["SENDMSGEXT","0", sendThis, $hostname,dst, "jwan"].join(" ")
-	#puts "Payload: " + payload.to_s
+	puts "Payload: " + payload.to_s
 	size = payload.length	#pull size to check when sending
 	#puts "Payload Size: " + size.to_s
 =begin
@@ -465,7 +471,7 @@ def sendmsgExt(cmd)
 	#ARRIVED BEFORE PRINTING MAYBE ADD TOTLEN
 	#DOES OUR IMPLEMENTATION HANDLE THIS?
 
-	#STDOUT.puts "SENDMSGEXT called"
+	STDOUT.puts "SENDMSGEXT called with " + cmd.to_s
 	ack = cmd[0]
 	msg = cmd[1]
 	src = cmd[2]
@@ -483,6 +489,7 @@ def sendmsgExt(cmd)
 		#build payload to send back to source
 		#payload is [COMMAND, ACK, DONTCARE, SOURCE, STUFFEDCHAR]
 		payload = ["SENDMSGEXT","1","junk",$hostname,"jwan"].join(" ")
+		
 		send("SENDMSGEXT",payload,dst,"packetSwitching","-1")
 	
 	#if another node is ACK'ing your message turn timer off
@@ -1233,7 +1240,7 @@ def circuitD(cmd)
 	dst = $circuitDst[circuitId]
 
 	if !$circuit.has_key?(circuitId) || !$neighbor[$circuit[circuitId][0]] 
-		STDOUT.puts "CIRCUIT ERROR: " + $hostname " −/−> " + "DAFUQDOIKNOW" + " FAILED AT " + $hostname
+		STDOUT.puts "CIRCUIT ERROR: " + $hostname +  " −/−> " + "DAFUQDOIKNOW" + " FAILED AT " + $hostname
 	else
 		nextNode = $circuit[circuitId][0]
 		$circuit[circuitId].delete(0)
@@ -1279,7 +1286,7 @@ def circuitDExtError(cmd)
 	fnode = cmd[1]
 	dst = cmd[2]
 
-	STDOUT.puts "CIRCUIT ERROR: " + $hostname " −/−> " + dst + " FAILED AT " + fnode
+	STDOUT.puts "CIRCUIT ERROR: " + $hostname + " −/−> " + dst + " FAILED AT " + fnode
 end
 
 # --------------------- Threads --------------------- #
@@ -1289,7 +1296,7 @@ getCmdLin will receive any input from the command line and buffer it.
 =end
 def getCmdLin()
 	while(line = STDIN.gets())
-		#puts "Std in line: " + line
+	#	puts "Std in line: " + line
 		$cmdLinBuffer << line
 	end
 end
@@ -1320,7 +1327,7 @@ def executeCmdLin()
 		args = newArr[1..-1]		
 		args << "packetSwitching"
 		args << "-1"
-		#puts "CmdLinCmd+Args: "cmd + args.to_s
+		#puts "CmdLinCmd+Args: "+ cmd + args.to_s
 #=end
 		
 		case cmd
@@ -1457,8 +1464,8 @@ def serverThread()
 						#puts "putting data in buffer"
 						buffer = sock.gets("jwan")
 					 	if buffer != nil	
-						puts "SERVERGOT: " + buffer
-						puts	
+						#puts "SERVERGOT: " + buffer
+						#puts	
 						$recvBuffer << buffer
 						end
 						#$recvBuffer << sock.gets()
@@ -1489,7 +1496,6 @@ def processPackets()
 	while (!$recvBuffer.empty?)
 		#puts "data in recv buffer"
 		packet = $recvBuffer.delete_at(0)
-		
 		#STDOUT.puts "Packet in process " + packet
 		if ($hostname == getHeaderVal(packet,"dst") || getHeaderVal(packet, "cmd") == "TRACEROUTEEXT" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTCHECK" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTBUILD" )
 			src = getHeaderVal(packet,"src")
@@ -1498,6 +1504,9 @@ def processPackets()
 			$packetHash[src][id][offset] = packet	
 			checkPackets = true
 		elsif packet.length != 0
+			puts
+			puts $hostname + " FORWARDING PACKET: " + packet.to_s
+			puts
 			forwardPacket(packet)
 
 			#puts "Src: "+ src 
@@ -1519,8 +1528,8 @@ def processPackets()
 					if totLen!= nil && totLen == sum
 						#puts "totLen"
 						msg = reconstructMsg(idHash)
-						puts "MSG: " + msg.to_s
-						puts 
+						#puts "MSG: " + msg.to_s
+						#puts 
 						$extCmdBuffer << msg
 						$packetHash[srcKey].delete(idKey)
 
@@ -1662,6 +1671,7 @@ def forwardPacket(packet)
 		packet = header + ":" + payload
 	else
 		STDOUT.puts "SOMETHING WENT WRONG IN FORWARD PACKETS. HEADER VALUE FOR ROUTINGTYPE IS INCORRECT"
+		
 		STDOUT.puts getHeaderVal(packet, "routingType")
 	end
 
