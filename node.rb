@@ -66,7 +66,7 @@ class Timer
 				#sleep for some specified time then wake
 				#and update timer
 				sleep(DELTA_T)
-				@curTime += DELTA_T
+				@curTime = (@curTime + DELTA_T).round(3)
 
 			end
 		}
@@ -137,21 +137,27 @@ end
 
 def dumptable(args)
 	fileName = args[0]
+	File.open(fileName, "w") { |file|
+		$cost.each_key { |node|
+			string = $hostname + "," +  node + "," + $nextHop[node] + "," + $cost[node].to_s 
+			file.puts(string)
+		}
+	}
+
+=begin
 	CSV.open(fileName, "wb") { |csv|
 		$cost.each_key { |node|
 			csv << [$hostname, node, $nextHop[node],
 	   $cost[node]]
 		}
 	}
+=end
 
 end
 
 # Close connections, empty buffers, kill threads
 def shutdown(cmd)
-	#$cmdLin.kill
-	#$server.kill
-	#$processPax.kill
-	$timer.kill
+
 	$nodeToSocket.each_value do |socket|
 		begin 
 			if !socket.shutdown? then
@@ -268,21 +274,22 @@ def keepTime
 	time = 0
 	loop do
 		sleep(0.1)
-		time += 0.1
+		time = (time + 0.1).round(1)
 		#every update Interval flood link state packets
 		if(time % $updateInterval == 0)
 			#MARK MAKE LINKSTATE MORE EFFICIENT BY RUNNING
 			#WHENEVER IT RECIEVES A PACKET OR DURING TIME
-			if($linkState.alive?)
-			Thread.new do
-				linkStateUpdate
+			if($linkState == nil || !$linkState.alive?)
+				$linkState = Thread.new do
+					linkStateUpdate
+				end
 			end
 		end
 
 		#let link state packets settle for half an interval
 		#then apply them to graph
 		#then apply edged edgeu updates to graph
-		if( (time % (1.5*$updateInterval)).floor == 0)
+		if( time % (0.5*$updateInterval).round(1) == 0)
 			Thread.new do
 				emptyLinkBuffer
 				emptyEdgeBuffer
@@ -297,7 +304,7 @@ cycle through all the link state packets and apply them to the graph
 def emptyLinkBuffer
 	#make a deep copy of the array and then make a new link buffer
 	#so that there's no additions to the arrays during clearing
-	
+
 	#arr = $linkBuffer.clone
 	#$linkBuffer = Array.new
 
@@ -364,6 +371,7 @@ def linkStateUpdate
 		payload = ["LSUEXT", payloadArr.join(","), $hostname, "jwan"].join(" ")
 		send("LSUEXT", payload, neighbor,"packetSwitching", "-1" )
 	}
+	$linkState.exit
 
 end
 
@@ -388,8 +396,9 @@ def linkStateUpdateExt(cmd)
 		# tmp should contain ["n1", "14"]
 		tmp = str.scan(/(.*)=(.*)/).flatten 
 		senderCstHash[tmp[0]] = tmp[1].to_i
+		#puts "LINKSTATEUPDATETMP: " + tmp.to_s
 	}
-
+	change = nil
 	# Updates the hash table if needed
 	senderCstHash.each { |dst, cst2Dst|
 		# if the dst node is in the global hash,
@@ -400,18 +409,30 @@ def linkStateUpdateExt(cmd)
 				if $cost[sender] + cst2Dst < $cost[dst] 
 					$nextHop[dst] = sender
 					$cost[dst] = $cost[sender] + cst2Dst
+					change = 1
+
 					#consider when path gets worse 
 				elsif sender == $nextHop[dst]
 					$cost[dst] = $cost[sender] + cst2Dst
+					change = 1
 				end
 				# If the dst node is NOT in the global has,
 				# add it to the routing table
 			else 
+
 				$cost[dst] = $cost[sender] + cst2Dst
 				$nextHop[dst] = sender
+				change = 1
 			end
 		end
 	}
+
+	if( change && $linkState == nil )
+		$linkState = Thread.new do
+			linkStateUpdate
+		end
+		change = nil
+	end
 end
 
 
@@ -424,7 +445,7 @@ the whole message cannot be sent, sendmsg will print an error.
 
 =end
 def sendmsg(cmd)
-	STDOUT.puts "SENDMSG called with" + cmd.to_s
+	#STDOUT.puts "SENDMSG called with" + cmd.to_s
 
 	dst = cmd[0]		#pull destination
 	msg = cmd[1..-3].join(" ")            #pull message
@@ -445,7 +466,7 @@ def sendmsg(cmd)
 =end
 
 	send("SENDMSGEXT", payload, dst, routingType, path)
-	
+
 	$sendMsgTimers[dst] = $pingTimeout
 	msgTracker(dst)
 =begin PSUEDOCODE
@@ -471,7 +492,7 @@ def sendmsgExt(cmd)
 	#ARRIVED BEFORE PRINTING MAYBE ADD TOTLEN
 	#DOES OUR IMPLEMENTATION HANDLE THIS?
 
-	STDOUT.puts "SENDMSGEXT called with " + cmd.to_s
+	#STDOUT.puts "SENDMSGEXT called with " + cmd.to_s
 	ack = cmd[0]
 	msg = cmd[1]
 	src = cmd[2]
@@ -482,21 +503,21 @@ def sendmsgExt(cmd)
 
 		#remove the stuffed chars
 		msg = msg.gsub("mork","")
-		
+
 		#print necessary message
 		STDOUT.puts "SENDMSG: " + src + " --> " + msg
-		
+
 		#build payload to send back to source
 		#payload is [COMMAND, ACK, DONTCARE, SOURCE, STUFFEDCHAR]
 		payload = ["SENDMSGEXT","1","junk",$hostname,"jwan"].join(" ")
-		
+
 		send("SENDMSGEXT",payload,dst,"packetSwitching","-1")
-	
-	#if another node is ACK'ing your message turn timer off
+
+		#if another node is ACK'ing your message turn timer off
 	elsif(ack == "1")
 		$sendMsgTimers[src] = nil
 
-	#just in case
+		#just in case
 	else
 		STDOUT.puts "weirdness in sendMsgExt"
 	end
@@ -510,32 +531,32 @@ message.
 =end
 def msgTracker(dst)
 
-	
+
 	sleepyTime = $pingTimeout/4 #generic time to sleep
 
 	#new thread to do the tracking
 	Thread.new(dst,sleepyTime) { |dst, sleepyTime|
-	loop do	
-		sleep sleepyTime
-		
-		
-		timer = $sendMsgTimers[dst]
-		
-		#if timer is nil turn the timer off
-		if timer == nil
-			Thread.exit
-		
-		#if timer has expired print error message and turn timer
-		#off
-		elsif timer <= 0
-			STDOUT.puts "SENDMSG ERROR: HOST UNREACHABLE"
-			Thread.exit
-		
-		#otherwise decrease the timer
-		else
-			$sendMsgTimers[dst] = $sendMsgTimers[dst] - sleepyTime
+		loop do	
+			sleep sleepyTime
+
+
+			timer = $sendMsgTimers[dst]
+
+			#if timer is nil turn the timer off
+			if timer == nil
+				Thread.exit
+
+				#if timer has expired print error message and turn timer
+				#off
+			elsif timer <= 0
+				STDOUT.puts "SENDMSG ERROR: HOST UNREACHABLE"
+				Thread.exit
+
+				#otherwise decrease the timer
+			else
+				$sendMsgTimers[dst] = $sendMsgTimers[dst] - sleepyTime
+			end
 		end
-	end
 	}
 
 end
@@ -608,13 +629,12 @@ def ping(cmd)
 				#get the array that's holding the ping
 				#timeout counters and put a new one in
 				#for the message about to be sent
-				arr = $nodeToPings[dst]
 				#puts "Sending pings arr: " + arr.to_s
 				#puts "Pingtimeout: " + $pingTimeout.to_s
-				arr[pingCounter] = $pingTimeout
-				#puts arr.to_s
+				$nodeToPings[dst][pingCounter] = $pingTimeout
+				#puts "PING NTP: " + $nodeToPings.to_s
 				limit = numPings * ($pingTimeout + delay)
-				pingTracker(dst, limit)
+				pingTracker(dst,pingCounter, limit)
 				#src may not be necessary if we 
 				#can parse from header
 
@@ -675,18 +695,14 @@ def pingExt(cmd)
 
 	end
 	if(ack == 1)#print ping messages
-		#MARK NEED TO ADD LOGIC THAT CHECKS TO SEE IF PINGTIMEOUT
-		#HAS EXPIRED BEFORE YOU DO THIS
-
 
 		sendTime = cmd[1].to_f #pull sendTime and make it float
 		seqNum = cmd[2]	       #pull seqNum
 		dst = cmd[4]	       #pull the original destination
 
 		#check to make sure the ping hasn't timed out already
-		arr = $nodeToPings[dst]
-		if(arr[seqNum.to_i] != nil )
-			arr[seqNum.to_i] = nil
+		if($nodeToPings[dst][seqNum.to_i] != nil )
+			$nodeToPings[dst][seqNum.to_i] = nil
 			rtt = $clock.runTime - sendTime
 			rtt = rtt.round(3)
 			puts seqNum + " " + dst + " " + rtt.to_s
@@ -709,16 +725,16 @@ for the pings to that node. If a timer expires it will print and error
 message.
 
 =end
-def pingTracker(dst,limit)
-	#puts "Pingtracker called with dst" + dst.to_s
+def pingTracker(dst, pingCounter, limit)
+	#puts "Pingtracker called with dst" + dst.to_s + " " + pingCounter.to_s
 	#spawn thread to track timers	
-	Thread.new(dst) { |dst|
+	Thread.new(dst,pingCounter) { |dst, pingCounter|
 		#semi arbitrary number cause why not
 		num = $pingTimeout/4
 
 		#suicide countdown for this thread
 		timer = 0
-
+		loop do
 		#sleep that magic number
 		sleep num
 		#puts "Pingtracker doing work"
@@ -730,25 +746,30 @@ def pingTracker(dst,limit)
 		arr = $nodeToPings[dst]
 		#puts "arr: " + arr.to_s
 		#if the arr contains timers
-		if arr and timer < limit
+		if $nodeToPings[dst][pingCounter] and timer < limit
 			#go through and decrement
-			arr.each_with_index { |clock, idx|
-				#puts "Clock: " + clock.to_s
-				if arr[idx] != nil
-					arr[idx] =  clock - num
-					if clock < 0 or clock == 0 
-						STDOUT.puts "PING ERROR: HOST UNREACHABLE"
-						arr[idx] = nil
-					end 
-				end
-			}
+			#$nodeToPings[dst].each_with_index { |clock, idx|
+			#puts "Clock: " + clock.to_s
+			if $nodeToPings[dst][pingCounter] != nil
+				#puts "pingtracker decrementingi " + $nodeToPings[dst][pingCounter].to_s
+				
+				$nodeToPings[dst][pingCounter] =  $nodeToPings[dst][pingCounter]- num
+			#puts $nodeToPings[dst][pingCounter].to_s	
+				
+				if $nodeToPings[dst][pingCounter] <= 0
+					STDOUT.puts "PING ERROR: HOST UNREACHABLE"
+					$nodeToPings[dst][pingCounter] = nil
+				Thread.exit
+				end 
+			end
+			#}
 		else
 			#puts "pingtracker dying because " + timer.to_s
 			#puts arr
 			Thread.exit
 		end
 
-
+		end
 	}
 
 end
@@ -771,7 +792,7 @@ def traceroute(cmd)
 	dst = cmd[0]			#pull destination from argument
 	routingType = cmd[-2]
 	path = cmd[-1]
-	
+
 	$traceRoute[dst] = Array.new	#create new route in hash
 	$traceRoute[dst] << "0 " + $hostname + " 0"  #ADD TIME add source to hash
 
@@ -947,7 +968,7 @@ ftp will take an array of arguments in the form
 destination node and store it with filename.
 =end
 def ftp(cmd)
-	STDOUT.puts "FTP called with cmd: " + cmd.to_s
+	#STDOUT.puts "FTP called with cmd: " + cmd.to_s
 	dst = cmd[0] 		#get destination node
 	file = cmd[1]   	#get filename
 	path = cmd[2]   	#get filepath
@@ -964,9 +985,9 @@ def ftp(cmd)
 	#if this gets segmented will filename and filepath always
 	#be contained in the message? they will be necessary to open
 	#and store on the other end
-	
+
 	payload = ["FTPEXT",file,path, $hostname, "0", time,size, contents, "jwan"].join(" ")
-	STDOUT.puts "Calling ftp with: " + payload.to_s
+	#STDOUT.puts "Calling ftp with: " + payload.to_s
 	#STDOUT.puts "done printing"
 	send("FTPEXT",payload,dst, routingType, circuitId)
 
@@ -980,7 +1001,7 @@ ftpExt will take an array of arguments in the form
 to the filepath.
 =end
 def ftpExt(cmd)
-	STDOUT.puts "FTPEXT called with cmd: " + cmd.to_s
+	#STDOUT.puts "FTPEXT called with cmd: " + cmd.to_s
 	ack = cmd[3]
 
 	if( ack == "0" )
@@ -1028,9 +1049,9 @@ def ftpExt(cmd)
 		time = time.to_f
 		size = size.to_f
 
-		
+
 		sendTime = $clock.curTime - time
-		
+
 
 		speed = size/sendTime
 		sendTime = sendTime.round(4)
@@ -1044,7 +1065,7 @@ def ftpExt(cmd)
 		STDOUT.puts "something went wrong"
 	end
 
-	end
+end
 
 
 # --------------------- Part 3 --------------------- # 
@@ -1177,7 +1198,7 @@ def circuitBExtBuild(cmd)
 	fullCircuit = cmd[5].split(",")
 
 	hops = fullCircuit.length
-	
+
 	if circuit.empty? && dst == $hostname
 		#Send pos ack to src
 		STDOUT.puts "CIRCUIT " + src + "/" + circuitId + " --> " + dst + " over " + hops.to_s
@@ -1227,11 +1248,11 @@ def circuitM(cmd)
 	args = arr[1..-1]
 	args << "circuitSwitching"
 	case cmd
-		when "SENDMSG"; sendmsg(args)
-		when "PING"; ping(args)
-		when "TRACEROUTE"; traceroute(args)
-		when "FTP"; ftp(args)
-		else STDERR.puts "ERROR: INVALID COMMAND in circuitM \"#{cmd}\""
+	when "SENDMSG"; sendmsg(args)
+	when "PING"; ping(args)
+	when "TRACEROUTE"; traceroute(args)
+	when "FTP"; ftp(args)
+	else STDERR.puts "ERROR: INVALID COMMAND in circuitM \"#{cmd}\""
 	end
 end
 
@@ -1296,7 +1317,7 @@ getCmdLin will receive any input from the command line and buffer it.
 =end
 def getCmdLin()
 	while(line = STDIN.gets())
-	#	puts "Std in line: " + line
+		#	puts "Std in line: " + line
 		$cmdLinBuffer << line
 	end
 end
@@ -1319,7 +1340,7 @@ def executeCmdLin()
 		args << "packetSwitching"
 		puts "CmdLinCmd+Args" + cmd + args.to_s
 =end
-#=begin
+		#=begin
 		arr = line.scan(/(((mork)(.*)(mork))+|([\S]+))/)
 		newArr = Array.new
 		arr.map {|subArr| newArr << subArr[0] }
@@ -1328,8 +1349,8 @@ def executeCmdLin()
 		args << "packetSwitching"
 		args << "-1"
 		#puts "CmdLinCmd+Args: "+ cmd + args.to_s
-#=end
-		
+		#=end
+
 		case cmd
 		when "EDGEB"; edgeb(args)
 		when "EDGED"; $edgeBuffer << line #edged(args)
@@ -1379,9 +1400,9 @@ def executeCmdExt()
 		args = arr[1..-2]
 		args << "packetSwitching"	
 		puts "CmdLinExtCmd+Args: " + cmd + args.to_s
-		
+
 =end
-#=begin
+		#=begin
 		arr = line.scan(/(((mork)(.*)(mork))+|([\S]+))/)
 		newArr = Array.new
 		arr.map {|subArr| newArr << subArr[0] }
@@ -1389,7 +1410,7 @@ def executeCmdExt()
 		args = newArr[1..-1]
 		#args << "packetSwitching"
 		#puts "CmdLinExtCmd+Args: "cmd  + args.to_s
-#=end
+		#=end
 		case cmd
 		when "PINGEXT"; pingExt(args)
 		when "EDGEBEXT"; edgebExt(args)
@@ -1463,10 +1484,10 @@ def serverThread()
 						#has
 						#puts "putting data in buffer"
 						buffer = sock.gets("jwan")
-					 	if buffer != nil	
-						#puts "SERVERGOT: " + buffer
-						#puts	
-						$recvBuffer << buffer
+						if buffer != nil	
+							#puts "SERVERGOT: " + buffer
+							#puts	
+							$recvBuffer << buffer
 						end
 						#$recvBuffer << sock.gets()
 						#str = sock.readlines(nil)
@@ -1503,10 +1524,10 @@ def processPackets()
 			offset = getHeaderVal(packet, "offset").to_i
 			$packetHash[src][id][offset] = packet	
 			checkPackets = true
-		elsif packet.length != 0
-			puts
-			puts $hostname + " FORWARDING PACKET: " + packet.to_s
-			puts
+		elsif packet.length != 0 && packet != ""
+			#puts
+			#puts $hostname + " FORWARDING PACKET: " + packet.to_s
+			#puts
 			forwardPacket(packet)
 
 			#puts "Src: "+ src 
@@ -1588,7 +1609,7 @@ end
 # Appends header to each fragment
 # ADD ALL OF THE HEADER INFO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 def createPackets(cmd, fragments, dst, totLen, routingType, circuitId)
-	
+	#puts "CREATE PACKETS CALLED WITH : "+  cmd + " " + fragments.to_s + " " + dst + " " + totLen.to_s + " " + routingType + " " + circuitId	
 	packets = []
 	fragOffset = 0
 	fragments.each { |f|
@@ -1622,7 +1643,7 @@ def forwardPacket(packet)
 	#and nextHopwould be incorrect if it's a circuit
 	#instead make it a variable and decide before this line
 	#where it's going
-	#STDOUT.puts packet
+	#STDOUT.puts "FORWARD PACKET CALLED WITH: " + packet.to_s
 	#STDOUT.puts getHeaderVal(packet,"routingType")
 	if packet == nil
 		#puts "Nil packet in forwardPacket"
@@ -1651,10 +1672,10 @@ def forwardPacket(packet)
 		STDOUT.puts "JUAN IMPLEMENT CIRCUITS"
 =======
 =end
-		STDOUT.puts "SOMETHING WENT WRONG IN FORWARD PACKETS. HEADER VALUE FOR ROUTINGTYPE IS INCORRECT"
-		
-		STDOUT.puts getHeaderVal(packet, "routingType")
-#>>>>>>> 3ac76e1edf19941a35092fe2e34169c4fec4edde
+		#STDOUT.puts "SOMETHING WENT WRONG IN FORWARD PACKETS. HEADER VALUE FOR ROUTINGTYPE IS INCORRECT"
+
+		#STDOUT.puts getHeaderVal(packet, "routingType")
+		#>>>>>>> 3ac76e1edf19941a35092fe2e34169c4fec4edde
 	end
 
 	#modify TTL field, don't look, it's ugly
@@ -1667,8 +1688,8 @@ def forwardPacket(packet)
 		packet = header + ":" + payload
 		tcpSend(packet, $nextHop[dst])
 	else
-		STDOUT.puts packet
-		STDOUT.puts "A PACKET DIED IN " + $hostname
+		#STDOUT.puts packet
+		#STDOUT.puts "A PACKET DIED IN " + $hostname
 	end
 
 end
@@ -1690,7 +1711,7 @@ def tcpSend(packet, nextHop)
 		rescue	#if sending fails the connection is broken and the neighbor
 			#no longer exists
 			#	edged(nextHop)
-			STDOUT.puts "Node Died"
+			#STDOUT.puts "Node " + nextHop + "  Died"
 			$edgeBuffer << "EDGED EDGED " + nextHop 	
 		end
 		#socket.send(packet, packet.size)

@@ -18,12 +18,21 @@ echo
 echo CONSOLE_N2
 cat console_n2
 echo --- RUNNING PDF TEST ---
+ruby controller.rb pingNodes2.txt config < ftpTest3.in
+echo	CONSOLE_N1
+cat console_n1
+
+echo	CONSOLE_N2
+cat console_n2
 
 
+echo
 echo --- RUNNING BIG FILE TEST ---
+echo
 
+echo
 echo --- RUNNING FAR FTP TEST ---
-
+echo
 
 
 
