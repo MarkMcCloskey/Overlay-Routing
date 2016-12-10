@@ -1350,7 +1350,7 @@ def executeCmdLin()
 		args = newArr[1..-1]		
 		args << "packetSwitching"
 		args << "-1"
-		#puts "CmdLinCmd+Args: "+ cmd + args.to_s
+		puts "CmdLinCmd+Args: "+ cmd + args.to_s
 		#=end
 
 		case cmd
