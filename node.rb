@@ -1599,18 +1599,35 @@ def send(cmd, msg, dst, routingType, circuitId)
 	fragments = msg.chars.to_a.each_slice($maxPayload).to_a.map{|s|
 		s.join("")} #.to_s
 
+	if cmd == "TRACEROUTEEXT" && routingType == "circuitSwitching"
+		circuitTkn = msg[2]
+	else
+		circuitTkn = "0"
+	end
 
-	packets = createPackets(cmd, fragments, dst, msg.length,routingType, circuitId )
+	if routingType == "circuitSwitching"
+
+		nextDst = $circuit[circuitId][circuitTkn.to_i]
+	else
+		nextDst = $nextHop[dst]
+	end
+
+	if !nextDst
+		puts "No next dst :( in send()"
+		return
+	end
+
+	packets = createPackets(cmd, fragments, dst, msg.length,routingType, circuitId, circuitTkn)
 
 	packets.each { |p|
-		tcpSend(p, $nextHop[dst])
+		tcpSend(p, nextDst) #used to be $nextHop[dst]
 	}
 end
 
 # Appends header to each fragment
 # ADD ALL OF THE HEADER INFO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-def createPackets(cmd, fragments, dst, totLen, routingType, circuitId)
-	#puts "CREATE PACKETS CALLED WITH : "+  cmd + " " + fragments.to_s + " " + dst + " " + totLen.to_s + " " + routingType + " " + circuitId	
+def createPackets(cmd, fragments, dst, totLen, routingType, circuitId, circuitTkn)
+	
 	packets = []
 	fragOffset = 0
 	fragments.each { |f|
@@ -1624,7 +1641,7 @@ def createPackets(cmd, fragments, dst, totLen, routingType, circuitId)
 
 
 		header = ["src="+src, "dst="+dst, "id="+id.to_s, "cmd="+cmd, "fragFlag="+fragFlag.to_s, "fragOffset="+fragOffset.to_s,
-	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+$ttl.to_s, "routingType="+routingType, "circuitId="+circuitId,"circuitTkn="+"0"].join(",")
+	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+$ttl.to_s, "routingType="+routingType, "circuitId="+circuitId,"circuitTkn="+circuitTkn].join(",")
 
 		p = header + ":" + f
 
@@ -1647,18 +1664,26 @@ def forwardPacket(packet)
 	#STDOUT.puts "FORWARD PACKET CALLED WITH: " + packet.to_s
 	#STDOUT.puts getHeaderVal(packet,"routingType")
 	if packet == nil
-		#puts "Nil packet in forwardPacket"
-
+		puts "Nil packet in forwardPacket"
+		return
 	elsif getHeaderVal(packet, "routingType") == "packetSwitching"
 		dst = getHeaderVal(packet, "dst")
 		if $nextHop[dst]
 			nextDst = $nextHop[dst]
+		else
+			puts "No next dst in forwardPakcet"
+			return
 		end
 	elsif getHeaderVal(packet, "routingType") == "circuitSwitching"
 		circuitId = getHeaderVal(packet, "circuitId")
 		circuitTkn = getHeaderVal(packet, "circuitTkn").to_i + 1
 
 		nextDst = $circuit[circuitId][circuitTknt]
+
+		if !nextDst
+			puts "No next dst :( in forwardPakcet"
+			return
+		end
 
 		header = packet.partition(":")[0]
 		payload = packet.partition(":")[2]
@@ -1677,6 +1702,9 @@ def forwardPacket(packet)
 
 		#STDOUT.puts getHeaderVal(packet, "routingType")
 		#>>>>>>> 3ac76e1edf19941a35092fe2e34169c4fec4edde
+		STDOUT.puts "SOMETHING WENT WRONG IN FORWARD PACKETS. HEADER VALUE FOR ROUTINGTYPE IS INCORRECT"
+		
+		STDOUT.puts getHeaderVal(packet, "routingType")
 	end
 
 	#modify TTL field, don't look, it's ugly
@@ -1687,7 +1715,7 @@ def forwardPacket(packet)
 		headerElements[8] = "ttl=" + (getHeaderVal(packet, "ttl").to_i - 1).to_s
 		headerElements = headerElements.join(",")
 		packet = header + ":" + payload
-		tcpSend(packet, $nextHop[dst])
+		tcpSend(packet, nextDst) # USED TO BE $nextHop[dst]
 	else
 		#STDOUT.puts packet
 		#STDOUT.puts "A PACKET DIED IN " + $hostname
