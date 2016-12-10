@@ -22,7 +22,7 @@ $traceTimers = Hash.new
 $sendMsgTimers = Hash.new
 $circuit = Hash.new
 $circuitDst = Hash.new
-DELTA_T = 0.5
+DELTA_T = 0.01
 
 # Routing Table hashes
 # NOTE: Does not contain data for currently 
@@ -44,6 +44,8 @@ $packetHash = Hash.new { |h1, k1| h1[k1] =  Hash.new { # Buffer used to make pac
 	|h2, k2| h2[k2] =  Hash.new}} # packetHash[src][id][offset]
 
 # Threads
+$linkState
+$clearELBuffs
 $execute
 $cmdLin
 $cmdExt
@@ -101,7 +103,7 @@ def edgeb(cmd)
 	#create a connection with the new neighbor and save the 
 	#socket in the hash
 	#puts "trying to connect"
-	sleep(1)
+	sleep(0.05)
 	$nodeToSocket[dst] = TCPSocket.open(dstIp, $nodeToPort[dst])
 	#puts "tcp connected"
 	#puts $nodeToSocket[dst]
@@ -265,10 +267,13 @@ this action.
 def keepTime
 	time = 0
 	loop do
-		sleep(DELTA_T)
-		time += DELTA_T
+		sleep(0.1)
+		time += 0.1
 		#every update Interval flood link state packets
 		if(time % $updateInterval == 0)
+			#MARK MAKE LINKSTATE MORE EFFICIENT BY RUNNING
+			#WHENEVER IT RECIEVES A PACKET OR DURING TIME
+			if($linkState.alive?)
 			Thread.new do
 				linkStateUpdate
 			end
@@ -277,7 +282,7 @@ def keepTime
 		#let link state packets settle for half an interval
 		#then apply them to graph
 		#then apply edged edgeu updates to graph
-		if(time % (1.5*$updateInterval) == 0)
+		if( (time % (1.5*$updateInterval)).floor == 0)
 			Thread.new do
 				emptyLinkBuffer
 				emptyEdgeBuffer
@@ -1235,7 +1240,7 @@ def circuitD(cmd)
 	dst = $circuitDst[circuitId]
 
 	if !$circuit.has_key?(circuitId) || !$neighbor[$circuit[circuitId][0]] 
-		STDOUT.puts "CIRCUIT ERROR: " + $hostname " −/−> " + "DAFUQDOIKNOW" + " FAILED AT " + $hostname
+		STDOUT.puts "CIRCUIT ERROR: " + $hostname +  " −/−> " + "DAFUQDOIKNOW" + " FAILED AT " + $hostname
 	else
 		nextNode = $circuit[circuitId][0]
 		$circuit[circuitId].delete(0)
@@ -1281,7 +1286,7 @@ def circuitDExtError(cmd)
 	fnode = cmd[1]
 	dst = cmd[2]
 
-	STDOUT.puts "CIRCUIT ERROR: " + $hostname " −/−> " + dst + " FAILED AT " + fnode
+	STDOUT.puts "CIRCUIT ERROR: " + $hostname + " −/−> " + dst + " FAILED AT " + fnode
 end
 
 # --------------------- Threads --------------------- #

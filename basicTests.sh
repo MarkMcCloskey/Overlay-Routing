@@ -34,5 +34,11 @@ cat n2_t1_dumptable.txt
 
 make clean
 
+
+echo
+echo --- LET BIG GRAPH RUN A WHILE ---
+ruby controller.rb bigGraphNodes.txt config < bigGraph.in
+echo
+
 echo
 echo --- TESTING COMPLETE --- 

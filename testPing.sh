@@ -21,7 +21,19 @@ ruby controller.rb pingNodes3.txt config < pingTest5.in
 cat console_n1
 
 echo --- TEST 6 TIMEOUT CASE ---
-ruby controller.rb pingNodes3.txt config < pingTest6.in
+ruby controller.rb pingNodes3.txt timeoutConfig < pingTest6.in
 cat console_n1
+
+echo --- TEST FAR PING ---
+ruby controller.rb bigGraphNodes.txt quickConfig < pingTest7.in
+echo 	N1 CONSOLE
+cat console_n1
+
+echo	N8 CONSOLE
+cat console_n8
+
+echo	N11 CONSOLE
+cat console_n11
+
 
 echo --- TESTING COMPLETE --- 

@@ -1,0 +1,3 @@
+updateInterval=5
+maxPayload=64
+pingTimeout=0.001

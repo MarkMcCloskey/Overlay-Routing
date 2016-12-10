@@ -16,6 +16,11 @@ cat console_n1
 echo --- RUNNING TEST 4 BACK TO BACK TRACE ---
 ruby controller.rb traceNodes3.txt config < traceTest4.in
 
+echo --- RUNNING FAR TRACE TEST ---
+ruby controller.rb bigGraphNodes.txt quickConfig < traceTest5.in
 echo Node 1 Console:
 cat console_n1
+
+
+echo
 echo --- TESTING COMPLETE --- 
