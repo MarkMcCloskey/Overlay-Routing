@@ -21,6 +21,7 @@ $traceRoute = Hash.new
 $traceTimers = Hash.new
 $sendMsgTimers = Hash.new
 $circuit = Hash.new
+$circuitDst = Hash.new
 DELTA_T = 0.5
 
 # Routing Table hashes
@@ -1153,6 +1154,7 @@ def circuitBExtCheckPos(cmd)
 	if $neighbor[nextNode]
 		# Send payload
 		$circuit[circuitId][circuitTkn] = nextNode
+		$circuitDst[circuitId] = dst
 		payload = ["CIRCUITBEXTBUILD", circuitId, circuitTkn.to_s, $hostname, dst, circuit.join(","), fullCircuit.join(","), "jwan"].join(" ")
 		send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
 	else
@@ -1230,8 +1232,56 @@ end
 
 def circuitD(cmd)
 	circuitId = cmd[0]
+	dst = $circuitDst[circuitId]
 
+	if !$circuit.has_key?(circuitId) || !$neighbor[$circuit[circuitId][0]] 
+		STDOUT.puts "CIRCUIT ERROR: " + $hostname " −/−> " + "DAFUQDOIKNOW" + " FAILED AT " + $hostname
+	else
+		nextNode = $circuit[circuitId][0]
+		$circuit[circuitId].delete(0)
 
+		if $circuit[circuitId].empty?
+			$circuit.delete(circuitId)
+		end
+
+		payload = ["CIRCUITDEXT", circuitId, $hostname, dst, "0", "jwan"].join(" ")
+		send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
+	end
+end
+
+def circuitDExt(cmd)
+	circuitId = cmd[0]
+	src = cmd[1]
+	dst = cmd[2]
+	circuitTkn = cmd[3].to_i + 1
+
+	if !$circuit.has_key?(circuitId) || !$neighbor[$circuit[circuitId][circuitTkn]] 
+		payload = ["CIRCUITDEXTERROR", circuitId, $hostname, dst, "jwan"].join(" ")
+		send("CIRCUITBEXTCHECK", payload, src, "packetSwitching" , "-1")
+
+		if !$neighbor[$circuit[circuitId][circuitTkn]]
+			$circuit.delete(circuitId)
+		end
+
+	else
+		nextNode = $circuit[circuitId][circuitTkn]
+		$circuit[circuitId].delete(circuitTkn)
+
+		if $circuit[circuitId].empty?
+			$circuit.delete(circuitId)
+		end
+
+		payload = ["CIRCUITDEXT", circuitId, src, dst, circuitTkn, "jwan"].join(" ")
+		send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
+	end 
+end
+
+def circuitDExtError(cmd)
+	circuitId = cmd[0]
+	fnode = cmd[1]
+	dst = cmd[2]
+
+	STDOUT.puts "CIRCUIT ERROR: " + $hostname " −/−> " + dst + " FAILED AT " + fnode
 end
 
 # --------------------- Threads --------------------- #
@@ -1348,6 +1398,8 @@ def executeCmdExt()
 		when "CIRCUITBEXTERROR"; circuitBExtError(args)
 		when "CIRCUITBEXTBUILD"; circuitBExtBuild(args)
 		when "CIRCUITBEXTBUILDPOS"; circuitBExtBuildPos(args)
+		when "CIRCUITDEXT"; circuitDExt(args)
+		when "CIRCUITDEXTERROR"; circuitDExtError(args)
 		else STDERR.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
 	end
@@ -1545,7 +1597,7 @@ def createPackets(cmd, fragments, dst, totLen, routingType, circuitId)
 
 
 		header = ["src="+src, "dst="+dst, "id="+id.to_s, "cmd="+cmd, "fragFlag="+fragFlag.to_s, "fragOffset="+fragOffset.to_s,
-	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+$ttl.to_s, "routingType="+routingType, "circuitId="+circuitId,"circuitTok="+"0"].join(",")
+	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+$ttl.to_s, "routingType="+routingType, "circuitId="+circuitId,"circuitTkn="+"0"].join(",")
 
 		p = header + ":" + f
 
