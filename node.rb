@@ -1497,11 +1497,20 @@ def serverThread()
 						#read what the connection
 						#has
 						#puts "putting data in buffer"
+<<<<<<< HEAD
 						buffer = sock.gets("jwan")
 						if buffer != nil && (buffer.include? "src=")
 							puts "SERVERGOT: " + buffer
 							#puts
 							# JUAN ADDED THIS
+=======
+						buffer = sock.gets("poleen")
+						if buffer != nil && buffer.length > 1	
+							puts
+							puts "SERVERGOT: " + buffer
+							puts
+							buffer.gsub!("poleen","")
+>>>>>>> 6ac2e4016185265c24fcec32a7f0dd46a5029c78
 							$recvBuffer << buffer
 						else
 							#STDOUT.puts "Buffer: " + buffer
@@ -1532,6 +1541,9 @@ def processPackets()
 	totLen = nil
 	checkPackets = nil
 	#	loop do
+	if(!$recvBuffer.empty?)
+	puts "RECVBUFF: " + $recvBuffer.to_s
+	end
 	while (!$recvBuffer.empty?)
 		#puts "data in recv buffer"
 		packet = $recvBuffer.delete_at(0)
@@ -1570,8 +1582,9 @@ def processPackets()
 					if totLen!= nil && totLen == sum
 						#puts "totLen"
 						msg = reconstructMsg(idHash)
-						#puts "MSG: " + msg.to_s
-						#puts 
+						puts
+						puts "MSG: " + msg.to_s
+						puts 
 						$extCmdBuffer << msg
 						$packetHash[srcKey].delete(idKey)
 
@@ -1670,7 +1683,7 @@ def createPackets(cmd, fragments, dst, totLen, routingType, circuitId, circuitTk
 		header = ["src="+src, "dst="+dst, "id="+id.to_s, "cmd="+cmd, "fragFlag="+fragFlag.to_s, "fragOffset="+fragOffset.to_s,
 	    "len="+len.to_s, "totLen="+totLen.to_s, "ttl="+$ttl.to_s, "routingType="+routingType, "circuitId="+circuitId,"circuitTkn="+circuitTkn].join(",")
 
-		p = header + ":" + f
+		p = header + ":" + f + "poleen"
 
 		packets.push(p)
 
