@@ -309,6 +309,10 @@ def emptyLinkBuffer
 	#$linkBuffer = Array.new
 
 	#while(!$linkBuffer.empty?)
+	if !$linkBuffer.empty?
+	puts "LINK BUFFER: " + $linkBuffer.to_s
+	end
+
 	while(!$linkBuffer.empty?)	
 		line = $linkBuffer.delete_at(0)
 		line = line.strip()
@@ -331,7 +335,10 @@ def emptyEdgeBuffer
 	#arr = $edgeBuffer.clone
 	#$edgeBuffer = Array.new
 
-	#while(!$edgeBuffer.empty?)
+	#while(!$edgeBuffer.empty))
+	if !$edgeBuffer.empty?
+	puts "EDGE BUFFER: " + $edgeBuffer.to_s
+	end
 	while(!$edgeBuffer.empty?)
 		line = $edgeBuffer.delete_at(0)
 		line = line.strip()
@@ -445,7 +452,7 @@ the whole message cannot be sent, sendmsg will print an error.
 
 =end
 def sendmsg(cmd)
-	#STDOUT.puts "SENDMSG called with" + cmd.to_s
+	STDOUT.puts "SENDMSG called with" + cmd.to_s
 
 	dst = cmd[0]		#pull destination
 	msg = cmd[1..-3].join(" ")            #pull message
@@ -458,7 +465,7 @@ def sendmsg(cmd)
 
 	payload = ["SENDMSGEXT","0", sendThis, $hostname,dst, "jwan"].join(" ")
 	#puts "Payload: " + payload.to_s
-	size = payload.length	#pull size to check when sending
+	#size = payload.length	#pull size to check when sending
 	#puts "Payload Size: " + size.to_s
 =begin
 	MARK, to ensure full message sent, make the send chain return
@@ -492,7 +499,7 @@ def sendmsgExt(cmd)
 	#ARRIVED BEFORE PRINTING MAYBE ADD TOTLEN
 	#DOES OUR IMPLEMENTATION HANDLE THIS?
 
-	#STDOUT.puts "SENDMSGEXT called with " + cmd.to_s
+	STDOUT.puts "SENDMSGEXT called with " + cmd.to_s
 	ack = cmd[0]
 	msg = cmd[1]
 	src = cmd[2]
@@ -505,7 +512,7 @@ def sendmsgExt(cmd)
 		msg = msg.gsub("mork","")
 
 		#print necessary message
-		STDOUT.puts "SENDMSG: " + src + " --> " + msg
+		#STDOUT.puts "SENDMSG: " + src + " --> " + msg
 
 		#build payload to send back to source
 		#payload is [COMMAND, ACK, DONTCARE, SOURCE, STUFFEDCHAR]
@@ -1331,7 +1338,9 @@ and execute them.
 def executeCmdLin()
 	#temp = $cmdLinBuffer.clone
 	#$cmdLinBuffer = Array.new
-
+	if !$cmdLinBuffer.empty?
+		puts "CMD LIN BUFF: " + $cmdLinBuffer.to_s
+	end
 	while(!$cmdLinBuffer.empty?)
 		line = $cmdLinBuffer.delete_at(0)
 		line = line.strip()
@@ -1390,7 +1399,9 @@ and execute them.
 def executeCmdExt()
 	#temp = $extCmdBuffer.clone
 	#$extCmdBuffer = Array.new
-
+	if !$extCmdBuffer.empty?
+	puts "CMD LIN EXT BUFF: " + $extCmdBuffer.to_s
+	end
 	while(!$extCmdBuffer.empty?)
 		#	puts "inside getCmdExt"
 
@@ -1412,7 +1423,7 @@ def executeCmdExt()
 		cmd = newArr[0]
 		args = newArr[1..-1]
 		#args << "packetSwitching"
-		#puts "CmdLinExtCmd+Args: " + cmd  + args.to_s
+		puts "CmdLinExtCmd+Args: " + cmd  + args.to_s
 		#=end
 		case cmd
 		when "PINGEXT"; pingExt(args)
@@ -1487,7 +1498,7 @@ def serverThread()
 						#has
 						#puts "putting data in buffer"
 						buffer = sock.gets("jwan")
-						if buffer != nil	
+						if buffer != nil && buffer.length > 1	
 							#puts "SERVERGOT: " + buffer
 							#puts	
 							$recvBuffer << buffer
@@ -1720,7 +1731,7 @@ def forwardPacket(packet)
 		tcpSend(packet, nextDst) # USED TO BE $nextHop[dst]
 	else
 		#STDOUT.puts packet
-		#STDOUT.puts "A PACKET DIED IN " + $hostname
+		STDOUT.puts "A PACKET DIED IN " + $hostname
 	end
 
 end
@@ -1742,7 +1753,7 @@ def tcpSend(packet, nextHop)
 		rescue	#if sending fails the connection is broken and the neighbor
 			#no longer exists
 			#	edged(nextHop)
-			#STDOUT.puts "Node " + nextHop + "  Died"
+			STDOUT.puts "Node " + nextHop + "  Died"
 			$edgeBuffer << "EDGED EDGED " + nextHop 	
 		end
 		#socket.send(packet, packet.size)
