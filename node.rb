@@ -309,9 +309,9 @@ def emptyLinkBuffer
 	#$linkBuffer = Array.new
 
 	#while(!$linkBuffer.empty?)
-	if !$linkBuffer.empty?
-	puts "LINK BUFFER: " + $linkBuffer.to_s
-	end
+	#if !$linkBuffer.empty?
+	#puts "LINK BUFFER: " + $linkBuffer.to_s
+	#end
 
 	while(!$linkBuffer.empty?)	
 		line = $linkBuffer.delete_at(0)
@@ -336,9 +336,9 @@ def emptyEdgeBuffer
 	#$edgeBuffer = Array.new
 
 	#while(!$edgeBuffer.empty))
-	if !$edgeBuffer.empty?
-	puts "EDGE BUFFER: " + $edgeBuffer.to_s
-	end
+	#if !$edgeBuffer.empty?
+	#puts "EDGE BUFFER: " + $edgeBuffer.to_s
+	#end
 	while(!$edgeBuffer.empty?)
 		line = $edgeBuffer.delete_at(0)
 		line = line.strip()
@@ -512,7 +512,7 @@ def sendmsgExt(cmd)
 		msg = msg.gsub("mork","")
 
 		#print necessary message
-		#STDOUT.puts "SENDMSG: " + src + " --> " + msg
+		STDOUT.puts "SENDMSG: " + src + " --> " + msg
 
 		#build payload to send back to source
 		#payload is [COMMAND, ACK, DONTCARE, SOURCE, STUFFEDCHAR]
@@ -1338,9 +1338,9 @@ and execute them.
 def executeCmdLin()
 	#temp = $cmdLinBuffer.clone
 	#$cmdLinBuffer = Array.new
-	if !$cmdLinBuffer.empty?
-		puts "CMD LIN BUFF: " + $cmdLinBuffer.to_s
-	end
+	#if !$cmdLinBuffer.empty?
+	#	puts "CMD LIN BUFF: " + $cmdLinBuffer.to_s
+	#end
 	while(!$cmdLinBuffer.empty?)
 		line = $cmdLinBuffer.delete_at(0)
 		line = line.strip()
@@ -1359,7 +1359,7 @@ def executeCmdLin()
 		args = newArr[1..-1]		
 		args << "packetSwitching"
 		args << "-1"
-		puts "CmdLinCmd+Args: "+ cmd + args.to_s
+		#puts "CmdLinCmd+Args: "+ cmd + args.to_s
 		#=end
 
 		case cmd
@@ -1399,9 +1399,9 @@ and execute them.
 def executeCmdExt()
 	#temp = $extCmdBuffer.clone
 	#$extCmdBuffer = Array.new
-	if !$extCmdBuffer.empty?
-	puts "CMD LIN EXT BUFF: " + $extCmdBuffer.to_s
-	end
+	#if !$extCmdBuffer.empty?
+	#puts "CMD LIN EXT BUFF: " + $extCmdBuffer.to_s
+	#end
 	while(!$extCmdBuffer.empty?)
 		#	puts "inside getCmdExt"
 
@@ -1423,7 +1423,7 @@ def executeCmdExt()
 		cmd = newArr[0]
 		args = newArr[1..-1]
 		#args << "packetSwitching"
-		puts "CmdLinExtCmd+Args: " + cmd  + args.to_s
+		#puts "CmdLinExtCmd+Args: " + cmd  + args.to_s
 		#=end
 		case cmd
 		when "PINGEXT"; pingExt(args)
@@ -1480,7 +1480,7 @@ def serverThread()
 						#because a connection
 						#no longer exist so the 
 						#node is no longer 
-						#a neighbor
+					#a neighbor
 
 						#	edged(nextHop)
 
@@ -1499,9 +1499,10 @@ def serverThread()
 						#puts "putting data in buffer"
 						buffer = sock.gets("poleen")
 						if buffer != nil && buffer.length > 1	
-							puts
-							puts "SERVERGOT: " + buffer
-							puts
+							#puts
+							#puts "SERVERGOT: " + buffer
+							#puts
+							buffer.strip!
 							buffer.gsub!("poleen","")
 							$recvBuffer << buffer
 						end
@@ -1530,9 +1531,9 @@ def processPackets()
 	totLen = nil
 	checkPackets = nil
 	#	loop do
-	if(!$recvBuffer.empty?)
-	puts "RECVBUFF: " + $recvBuffer.to_s
-	end
+	#if(!$recvBuffer.empty?)
+	#puts "RECVBUFF: " + $recvBuffer.to_s
+	#end
 	while (!$recvBuffer.empty?)
 		#puts "data in recv buffer"
 		packet = $recvBuffer.delete_at(0)
@@ -1540,7 +1541,7 @@ def processPackets()
 		if ($hostname == getHeaderVal(packet,"dst") || getHeaderVal(packet, "cmd") == "TRACEROUTEEXT" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTCHECK" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTBUILD" )
 			src = getHeaderVal(packet,"src")
 			id = getHeaderVal(packet, "id").to_i
-			offset = getHeaderVal(packet, "offset").to_i
+			offset = getHeaderVal(packet, "fragOffset").to_i
 			$packetHash[src][id][offset] = packet	
 			checkPackets = true
 		elsif packet.length != 0 && packet != ""
@@ -1563,14 +1564,17 @@ def processPackets()
 						packet = idHash[k]
 						totLen = getHeaderVal(packet, "totLen").to_i
 						sum = sum + getHeaderVal(packet, "len").to_i
-					}
+					#puts "TOTLEN AND SUM: " + totLen.to_s + " " + sum.to_s
 
+					}
+					#puts $packetHash["n1"][1].to_s
+					#puts "TOTLEN AND SUM: " + totLen.to_s + " " + sum.to_s
 					if totLen!= nil && totLen == sum
 						#puts "totLen"
 						msg = reconstructMsg(idHash)
-						puts
-						puts "MSG: " + msg.to_s
-						puts 
+						#puts
+						#puts "MSG: " + msg.to_s
+						#puts 
 						$extCmdBuffer << msg
 						$packetHash[srcKey].delete(idKey)
 
@@ -1600,6 +1604,7 @@ the Hash contains one single message. The key is the offset value of that
 packet. Sort puts them in order of offset and then reassembles all the 
 packets
 =end
+	#puts "RECONSTRUCTMESSAGE CALLED WITH: " + packetHash.to_s
 	packetHash.keys.sort.each { |offset,val| 
 		msg += packetHash[offset].partition(":")[2]
 	}
