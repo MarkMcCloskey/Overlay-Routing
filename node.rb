@@ -309,6 +309,10 @@ def emptyLinkBuffer
 	#$linkBuffer = Array.new
 
 	#while(!$linkBuffer.empty?)
+	if !$linkBuffer.empty?
+	puts "LINK BUFFER: " + $linkBuffer.to_s
+	end
+
 	while(!$linkBuffer.empty?)	
 		line = $linkBuffer.delete_at(0)
 		line = line.strip()
@@ -331,7 +335,10 @@ def emptyEdgeBuffer
 	#arr = $edgeBuffer.clone
 	#$edgeBuffer = Array.new
 
-	#while(!$edgeBuffer.empty?)
+	#while(!$edgeBuffer.empty))
+	if !$edgeBuffer.empty?
+	puts "EDGE BUFFER: " + $edgeBuffer.to_s
+	end
 	while(!$edgeBuffer.empty?)
 		line = $edgeBuffer.delete_at(0)
 		line = line.strip()
@@ -445,7 +452,7 @@ the whole message cannot be sent, sendmsg will print an error.
 
 =end
 def sendmsg(cmd)
-	#STDOUT.puts "SENDMSG called with" + cmd.to_s
+	STDOUT.puts "SENDMSG called with" + cmd.to_s
 
 	dst = cmd[0]		#pull destination
 	msg = cmd[1..-3].join(" ")            #pull message
@@ -457,8 +464,8 @@ def sendmsg(cmd)
 	sendThis = "mork" + msg.to_s + "mork"
 
 	payload = ["SENDMSGEXT","0", sendThis, $hostname,dst, "jwan"].join(" ")
-	puts "Payload: " + payload.to_s
-	size = payload.length	#pull size to check when sending
+	#puts "Payload: " + payload.to_s
+	#size = payload.length	#pull size to check when sending
 	#puts "Payload Size: " + size.to_s
 =begin
 	MARK, to ensure full message sent, make the send chain return
@@ -492,7 +499,7 @@ def sendmsgExt(cmd)
 	#ARRIVED BEFORE PRINTING MAYBE ADD TOTLEN
 	#DOES OUR IMPLEMENTATION HANDLE THIS?
 
-	#STDOUT.puts "SENDMSGEXT called with " + cmd.to_s
+	STDOUT.puts "SENDMSGEXT called with " + cmd.to_s
 	ack = cmd[0]
 	msg = cmd[1]
 	src = cmd[2]
@@ -505,7 +512,7 @@ def sendmsgExt(cmd)
 		msg = msg.gsub("mork","")
 
 		#print necessary message
-		STDOUT.puts "SENDMSG: " + src + " --> " + msg
+		#STDOUT.puts "SENDMSG: " + src + " --> " + msg
 
 		#build payload to send back to source
 		#payload is [COMMAND, ACK, DONTCARE, SOURCE, STUFFEDCHAR]
@@ -532,7 +539,7 @@ message.
 def msgTracker(dst)
 
 
-	sleepyTime = $pingTimeout/4 #generic time to sleep
+	sleepyTime = $pingTimeout 
 
 	#new thread to do the tracking
 	Thread.new(dst,sleepyTime) { |dst, sleepyTime|
@@ -969,7 +976,7 @@ ftp will take an array of arguments in the form
 destination node and store it with filename.
 =end
 def ftp(cmd)
-	#STDOUT.puts "FTP called with cmd: " + cmd.to_s
+	STDOUT.puts "FTP called with cmd: " + cmd.to_s
 	dst = cmd[0] 		#get destination node
 	file = cmd[1]   	#get filename
 	path = cmd[2]   	#get filepath
@@ -979,16 +986,17 @@ def ftp(cmd)
 	routingType = cmd[-2]
 	circuitId = cmd[-1]
 	#opens file, should read whole thing, and close it
-	contents = IO.binread(file)
-	#contents = File.read(file)
+	#contents = IO.binread(file)
+	contents = File.read(file)
 	size = contents.length
 	#load payload with filename, path, and the contents of file, ACK
 	#if this gets segmented will filename and filepath always
 	#be contained in the message? they will be necessary to open
 	#and store on the other end
 
+	contents = "mork" + contents + "mork"
 	payload = ["FTPEXT",file,path, $hostname, "0", time,size, contents, "jwan"].join(" ")
-	#STDOUT.puts "Calling ftp with: " + payload.to_s
+	STDOUT.puts "Calling ftp with: " + payload.to_s
 	#STDOUT.puts "done printing"
 	send("FTPEXT",payload,dst, routingType, circuitId)
 
@@ -1002,7 +1010,7 @@ ftpExt will take an array of arguments in the form
 to the filepath.
 =end
 def ftpExt(cmd)
-	#STDOUT.puts "FTPEXT called with cmd: " + cmd.to_s
+	STDOUT.puts "FTPEXT called with cmd: " + cmd.to_s
 	ack = cmd[3]
 
 	if( ack == "0" )
@@ -1012,7 +1020,7 @@ def ftpExt(cmd)
 		time = cmd[4]
 		size = cmd[5]
 		contents = cmd[6]	#get contents
-
+		contents = contents.gsub("mork","")
 
 		#if the directory doesn't already exist, create it
 		if( !Dir.exists?(path) )
@@ -1024,14 +1032,14 @@ def ftpExt(cmd)
 		# possible we should overwrite if already existing. Automated test
 		# may fail a diff if we just add to end?
 
-		#file = File.open(name,"w") # open, or create, a file for writing. 
-		#file.puts(contents)
-		#file.close		#close the file, cause good habits.
+		file = File.open(name,"w") # open, or create, a file for writing. 
+		file.puts(contents)
+		file.close		#close the file, cause good habits.
 
-		IO.binwrite(name,contents)
+		#IO.binwrite(name,contents)
 		#get message to send back for timing
 		payload = ["FTPEXT",name, $hostname, time,"1",size, "jwan" ].join(" ")
-		#puts "Payload: " + payload.to_s
+		puts "Payload: " + payload.to_s
 		send("FTPEXT",payload,src, "packetSwitching" , "-1")
 
 
@@ -1330,7 +1338,9 @@ and execute them.
 def executeCmdLin()
 	#temp = $cmdLinBuffer.clone
 	#$cmdLinBuffer = Array.new
-
+	if !$cmdLinBuffer.empty?
+		puts "CMD LIN BUFF: " + $cmdLinBuffer.to_s
+	end
 	while(!$cmdLinBuffer.empty?)
 		line = $cmdLinBuffer.delete_at(0)
 		line = line.strip()
@@ -1349,7 +1359,7 @@ def executeCmdLin()
 		args = newArr[1..-1]		
 		args << "packetSwitching"
 		args << "-1"
-		#puts "CmdLinCmd+Args: "+ cmd + args.to_s
+		puts "CmdLinCmd+Args: "+ cmd + args.to_s
 		#=end
 
 		case cmd
@@ -1389,13 +1399,15 @@ and execute them.
 def executeCmdExt()
 	#temp = $extCmdBuffer.clone
 	#$extCmdBuffer = Array.new
-
+	if !$extCmdBuffer.empty?
+	puts "CMD LIN EXT BUFF: " + $extCmdBuffer.to_s
+	end
 	while(!$extCmdBuffer.empty?)
 		#	puts "inside getCmdExt"
 
 		line = $extCmdBuffer.delete_at(0)
 		line = line.strip()
-		puts "GETCMDEXT called with: " + line
+		#puts "GETCMDEXT called with: " + line
 =begin		
 		arr = line.split(' ')
 		cmd = arr[0]
@@ -1411,7 +1423,7 @@ def executeCmdExt()
 		cmd = newArr[0]
 		args = newArr[1..-1]
 		#args << "packetSwitching"
-		#puts "CmdLinExtCmd+Args: " + cmd  + args.to_s
+		puts "CmdLinExtCmd+Args: " + cmd  + args.to_s
 		#=end
 		case cmd
 		when "PINGEXT"; pingExt(args)
@@ -1518,7 +1530,7 @@ end
 
 def processPackets()
 	totLen = nil
-	checkPackets = false
+	checkPackets = nil
 	#	loop do
 	while (!$recvBuffer.empty?)
 		#puts "data in recv buffer"
@@ -1566,7 +1578,7 @@ def processPackets()
 					end
 				}
 			}
-			checkPackets = false
+			checkPackets = nil
 		end
 
 		#		$cmdExt = Thread.new do
@@ -1722,8 +1734,8 @@ def forwardPacket(packet)
 		packet = header + ":" + payload
 		tcpSend(packet, nextDst) # USED TO BE $nextHop[dst]
 	else
-		STDOUT.puts "Packet: " + packet
 		STDOUT.puts "A PACKET DIED IN " + $hostname
+		STDOUT.puts "Packet: " + packet
 	end
 
 end
@@ -1745,7 +1757,7 @@ def tcpSend(packet, nextHop)
 		rescue	#if sending fails the connection is broken and the neighbor
 			#no longer exists
 			#	edged(nextHop)
-			#STDOUT.puts "Node " + nextHop + "  Died"
+			STDOUT.puts "Node " + nextHop + "  Died"
 			$edgeBuffer << "EDGED EDGED " + nextHop 	
 		end
 		#socket.send(packet, packet.size)
