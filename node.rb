@@ -512,7 +512,7 @@ def sendmsgExt(cmd)
 		msg = msg.gsub("mork","")
 
 		#print necessary message
-		#STDOUT.puts "SENDMSG: " + src + " --> " + msg
+		STDOUT.puts "SENDMSG: " + src + " --> " + msg
 
 		#build payload to send back to source
 		#payload is [COMMAND, ACK, DONTCARE, SOURCE, STUFFEDCHAR]
@@ -1497,20 +1497,13 @@ def serverThread()
 						#read what the connection
 						#has
 						#puts "putting data in buffer"
-<<<<<<< HEAD
-						buffer = sock.gets("jwan")
-						if buffer != nil && (buffer.include? "src=")
-							puts "SERVERGOT: " + buffer
-							#puts
-							# JUAN ADDED THIS
-=======
 						buffer = sock.gets("poleen")
 						if buffer != nil && buffer.length > 1	
 							puts
 							puts "SERVERGOT: " + buffer
 							puts
+							buffer.strip!
 							buffer.gsub!("poleen","")
->>>>>>> 6ac2e4016185265c24fcec32a7f0dd46a5029c78
 							$recvBuffer << buffer
 						else
 							#STDOUT.puts "Buffer: " + buffer
@@ -1551,7 +1544,7 @@ def processPackets()
 		if ($hostname == getHeaderVal(packet,"dst") || getHeaderVal(packet, "cmd") == "TRACEROUTEEXT" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTCHECK" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTBUILD" )
 			src = getHeaderVal(packet,"src")
 			id = getHeaderVal(packet, "id").to_i
-			offset = getHeaderVal(packet, "offset").to_i
+			offset = getHeaderVal(packet, "fragOffset").to_i
 			$packetHash[src][id][offset] = packet	
 			checkPackets = true
 		elsif packet.length != 0 && packet != ""
@@ -1568,38 +1561,38 @@ def processPackets()
 			STDOUT.puts "SOMETHING WENT WRONG IN processPackets"
 			STDOUT.puts "Packet:" + packet 
 		end
-		if checkPackets
-			$packetHash.each {|srcKey,srcHash|
-				srcHash.each {|idKey, idHash|
-					sum = 0
-					idHash.keys.sort.each {|k|
-						#puts"inside id hash"
-						packet = idHash[k]
-						totLen = getHeaderVal(packet, "totLen").to_i
-						sum = sum + getHeaderVal(packet, "len").to_i
-					}
-
-					if totLen!= nil && totLen == sum
-						#puts "totLen"
-						msg = reconstructMsg(idHash)
-						puts
-						puts "MSG: " + msg.to_s
-						puts 
-						$extCmdBuffer << msg
-						$packetHash[srcKey].delete(idKey)
-
-					end
+	end
+	if checkPackets
+		$packetHash.each {|srcKey,srcHash|
+			srcHash.each {|idKey, idHash|
+				sum = 0
+				idHash.keys.sort.each {|k|
+					#puts"inside id hash"
+					packet = idHash[k]
+					totLen = getHeaderVal(packet, "totLen").to_i
+					sum = sum + getHeaderVal(packet, "len").to_i
 				}
+
+				if totLen!= nil && totLen == sum
+					#puts "totLen"
+					msg = reconstructMsg(idHash)
+					puts
+					puts "MSG: " + msg.to_s
+					puts 
+					$extCmdBuffer << msg
+					$packetHash[srcKey].delete(idKey)
+
+				end
 			}
-			checkPackets = nil
-		end
+		}
+		checkPackets = nil
+	end
 
 		#		$cmdExt = Thread.new do
 		#			getCmdExt()
 		#		end
 		#		$cmdExt.join
 		#	end
-	end
 end
 =begin
 reconstructMsg will take a hashtable that contains offset -> packet
