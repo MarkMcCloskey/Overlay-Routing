@@ -1,5 +1,19 @@
-GETCMDEXT called with: EDGEBEXT 127.0.0.1 n1 jwan
-GETCMDEXT called with: LSUEXT n2=1,n1=2 n3 jwan
-GETCMDEXT called with: LSUEXT n2=1,n3=2 n1 jwan
-GETCMDEXT called with: LSUEXT n2=1,n1=2 n3 jwan
-GETCMDEXT called with: LSUEXT n2=1,n3=2 n1 jwan
+SERVERGOT: src=n1,dst=n2,id=0,cmd=EDGEBEXT,fragFlag=0,fragOffset=0,len=26,totLen=26,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:EDGEBEXT 127.0.0.1 n1 jwan
+SERVERGOT: 
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=0,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:SENDMSGEXT 0 morkAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=64,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=128,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=192,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=256,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:HHHHHHHHHLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLOOOOOOOOOOOOOOOOOOOOOO
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=320,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:OONNNNNNNNNNNNNNNNNNGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGMMMMM
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=384,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:MMMMMMMMMMMMMMMMMMMMMMEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEESSSSSSSSS
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=448,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:SSSSSSSSSSSSSSSSSSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGGGGGGGGGGGGGG
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=512,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:GGGGGGGGGGGGGGGGGGEEEEEEEEEEEEEEEEEEEEEEEEEEE!!!!!!!!!!!!!!!!!!!
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=576,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:!WWWWWWWWWWWWWWWWHYYYYYYYYYYYYYYYYYYUUUUUUUUUUUUUUUUUUUUUUUUUDDD
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=640,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=704,len=64,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:OOOOOODDDDDDDDDDDDDDDIIIIIIIIIIIISSSSSSSSSSSSSSSSSSSSmork n1 n2 
+src=n1,dst=n2,id=1,cmd=SENDMSGEXT,fragFlag=0,fragOffset=768,len=4,totLen=772,ttl=100,routingType=packetSwitching,circuitId=-1,circuitTkn=0:jwan
+CMD LIN EXT BUFF: ["EDGEBEXT 127.0.0.1 n1 jwan"]
+CmdLinExtCmd+Args: EDGEBEXT["127.0.0.1", "n1", "jwan"]
+CMD LIN BUFF: ["SHUTDOWN\n"]
+CmdLinCmd+Args: SHUTDOWN["packetSwitching", "-1"]

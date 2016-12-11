@@ -1499,7 +1499,7 @@ def serverThread()
 						#puts "putting data in buffer"
 						buffer = sock.gets("jwan")
 						if buffer != nil && (buffer.include? "src=")
-							#puts "SERVERGOT: " + buffer
+							puts "SERVERGOT: " + buffer
 							#puts
 							# JUAN ADDED THIS
 							$recvBuffer << buffer
