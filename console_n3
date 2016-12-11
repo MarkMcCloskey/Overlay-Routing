@@ -1,0 +1,4 @@
+GETCMDEXT called with: EDGEBEXT 127.0.0.1 n2 jwan
+GETCMDEXT called with: LSUEXT n1=1,n3=1 n2 jwan
+GETCMDEXT called with: SENDMSGEXT 0 morkhellomork n1 n3 jwan
+SENDMSG: n1 --> hello

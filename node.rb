@@ -511,7 +511,7 @@ def sendmsgExt(cmd)
 		#payload is [COMMAND, ACK, DONTCARE, SOURCE, STUFFEDCHAR]
 		payload = ["SENDMSGEXT","1","junk",$hostname,"jwan"].join(" ")
 
-		send("SENDMSGEXT",payload,dst,"packetSwitching","-1")
+		send("SENDMSGEXT",payload,src,"packetSwitching","-1")
 
 		#if another node is ACK'ing your message turn timer off
 	elsif(ack == "1")
@@ -1262,7 +1262,7 @@ def circuitD(cmd)
 	dst = $circuitDst[circuitId]
 
 	if !$circuit.has_key?(circuitId) || !$neighbor[$circuit[circuitId][0]] 
-		STDOUT.puts "CIRCUIT ERROR: " + $hostname +  " −/−> " + "DAFUQDOIKNOW" + " FAILED AT " + $hostname
+		STDOUT.puts "CIRCUIT ERROR: " + $hostname +  " -/-> " + "DAFUQDOIKNOW" + " FAILED AT " + $hostname
 	else
 		nextNode = $circuit[circuitId][0]
 		$circuit[circuitId].delete(0)
@@ -1308,7 +1308,7 @@ def circuitDExtError(cmd)
 	fnode = cmd[1]
 	dst = cmd[2]
 
-	STDOUT.puts "CIRCUIT ERROR: " + $hostname + " −/−> " + dst + " FAILED AT " + fnode
+	STDOUT.puts "CIRCUIT ERROR: " + $hostname + " -/-> " + dst + " FAILED AT " + fnode
 end
 
 # --------------------- Threads --------------------- #
@@ -1486,10 +1486,14 @@ def serverThread()
 						#has
 						#puts "putting data in buffer"
 						buffer = sock.gets("jwan")
-						if buffer != nil	
+						if buffer != nil && (buffer.include? "src=")
 							#puts "SERVERGOT: " + buffer
-							#puts	
+							#puts
+							# JUAN ADDED THIS
 							$recvBuffer << buffer
+						else
+							#STDOUT.puts "Buffer: " + buffer
+							#STDOUT.puts "BufferSize: " + buffer.length.to_s
 						end
 						#$recvBuffer << sock.gets()
 						#str = sock.readlines(nil)
@@ -1535,7 +1539,10 @@ def processPackets()
 			#puts "Src: "+ src 
 			#puts "Id: " + id.to_s
 			#puts "Offset: " + offset.to_s
-			#puts "totLen: " + getHeaderVal(packet, "totLen") 
+			#puts "totLen: " + getHeaderVal(packet, "totLen")
+		else
+			STDOUT.puts "SOMETHING WENT WRONG IN processPackets"
+			STDOUT.puts "Packet:" + packet 
 		end
 		if checkPackets
 			$packetHash.each {|srcKey,srcHash|
@@ -1596,9 +1603,16 @@ other nodes Fragments the payload, adds the IP header to each packet, and
 sends each packet to the next node
 =end
 def send(cmd, msg, dst, routingType, circuitId)
-	#puts "SEND ROUTING TYPE AND CIRCUIT: " + routingType + " " + circuitId  
+	#puts "SEND ROUTING TYPE AND CIRCUIT: " + routingType + " " + circuitId
+	#puts "MSG SIZE: " + msg.length.to_s
+	#puts "Max Payload: " + $maxPayload.to_s  
+	
 	fragments = msg.chars.to_a.each_slice($maxPayload).to_a.map{|s|
 		s.join("")} #.to_s
+
+	#puts "Start Fragments"
+	#puts fragments
+	#puts "End Fragments"
 
 	if cmd == "TRACEROUTEEXT" && routingType == "circuitSwitching"
 		circuitTkn = msg[2]
@@ -1693,19 +1707,9 @@ def forwardPacket(packet)
 		headerElements = headerElements.join(",")
 		packet = header + ":" + payload
 	else
-=begin
-<<<<<<< HEAD
-		puts "Routing type: " + getHeaderVal(packet, "routingType")
-		STDOUT.puts "JUAN IMPLEMENT CIRCUITS"
-=======
-=end
-		#STDOUT.puts "SOMETHING WENT WRONG IN FORWARD PACKETS. HEADER VALUE FOR ROUTINGTYPE IS INCORRECT"
-
-		#STDOUT.puts getHeaderVal(packet, "routingType")
-		#>>>>>>> 3ac76e1edf19941a35092fe2e34169c4fec4edde
 		STDOUT.puts "SOMETHING WENT WRONG IN FORWARD PACKETS. HEADER VALUE FOR ROUTINGTYPE IS INCORRECT"
-		
-		STDOUT.puts getHeaderVal(packet, "routingType")
+		STDOUT.puts "Packet: " + packet
+
 	end
 
 	#modify TTL field, don't look, it's ugly
@@ -1718,8 +1722,8 @@ def forwardPacket(packet)
 		packet = header + ":" + payload
 		tcpSend(packet, nextDst) # USED TO BE $nextHop[dst]
 	else
-		#STDOUT.puts packet
-		#STDOUT.puts "A PACKET DIED IN " + $hostname
+		STDOUT.puts "Packet: " + packet
+		STDOUT.puts "A PACKET DIED IN " + $hostname
 	end
 
 end

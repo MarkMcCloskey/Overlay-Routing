@@ -1,0 +1,4 @@
+GETCMDEXT called with: LSUEXT n1=1,n3=1 n2 jwan
+Payload: SENDMSGEXT 0 morkhellomork n1 n3 jwan
+GETCMDEXT called with: SENDMSGEXT 1 junk n3 jwan
+GETCMDEXT called with: LSUEXT n1=1,n3=1 n2 jwan
