@@ -689,7 +689,7 @@ def pingExt(cmd)
 
 
 	ack = cmd[0].partition("=")[2].to_i
-	puts "pingExt Called with Ack: " + ack.to_s + " " + "Command: " + cmd.to_s
+	#puts "pingExt Called with Ack: " + ack.to_s + " " + "Command: " + cmd.to_s
 	if(ack == 0)#send response to ping
 		sendTime = cmd[1] #pull time sent from payload
 		seqNum = cmd[2]	  #pull the sequence number from payload
