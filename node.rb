@@ -20,7 +20,7 @@ $ttl = 100		        #array
 $traceRoute = Hash.new
 $traceTimers = Hash.new
 $sendMsgTimers = Hash.new
-$circuit = Hash.new
+$circuit = Hash.new { |h1, k1| h1[k1] =  Hash.new}
 $circuitDst = Hash.new
 DELTA_T = 0.01
 
@@ -309,9 +309,9 @@ def emptyLinkBuffer
 	#$linkBuffer = Array.new
 
 	#while(!$linkBuffer.empty?)
-	if !$linkBuffer.empty?
-	puts "LINK BUFFER: " + $linkBuffer.to_s
-	end
+	#if !$linkBuffer.empty?
+	#puts "LINK BUFFER: " + $linkBuffer.to_s
+	#end
 
 	while(!$linkBuffer.empty?)	
 		line = $linkBuffer.delete_at(0)
@@ -336,9 +336,9 @@ def emptyEdgeBuffer
 	#$edgeBuffer = Array.new
 
 	#while(!$edgeBuffer.empty))
-	if !$edgeBuffer.empty?
-	puts "EDGE BUFFER: " + $edgeBuffer.to_s
-	end
+	#if !$edgeBuffer.empty?
+	#puts "EDGE BUFFER: " + $edgeBuffer.to_s
+	#end
 	while(!$edgeBuffer.empty?)
 		line = $edgeBuffer.delete_at(0)
 		line = line.strip()
@@ -452,7 +452,7 @@ the whole message cannot be sent, sendmsg will print an error.
 
 =end
 def sendmsg(cmd)
-	STDOUT.puts "SENDMSG called with" + cmd.to_s
+	#STDOUT.puts "SENDMSG called with" + cmd.to_s
 
 	dst = cmd[0]		#pull destination
 	msg = cmd[1..-3].join(" ")            #pull message
@@ -499,7 +499,7 @@ def sendmsgExt(cmd)
 	#ARRIVED BEFORE PRINTING MAYBE ADD TOTLEN
 	#DOES OUR IMPLEMENTATION HANDLE THIS?
 
-	STDOUT.puts "SENDMSGEXT called with " + cmd.to_s
+	#STDOUT.puts "SENDMSGEXT called with " + cmd.to_s
 	ack = cmd[0]
 	msg = cmd[1]
 	src = cmd[2]
@@ -689,7 +689,7 @@ def pingExt(cmd)
 
 
 	ack = cmd[0].partition("=")[2].to_i
-	#puts"pingExt Called with Ack: " + ack.to_s + " " + "Command: " + cmd.to_s
+	puts "pingExt Called with Ack: " + ack.to_s + " " + "Command: " + cmd.to_s
 	if(ack == 0)#send response to ping
 		sendTime = cmd[1] #pull time sent from payload
 		seqNum = cmd[2]	  #pull the sequence number from payload
@@ -818,7 +818,7 @@ def traceroute(cmd)
 
 	time = $clock.curTime
 	#puts "Send time: " + time.to_s
-	payload = ["TRACEROUTEEXT", $hostname, dst, 0,time, "true", cmd[-1], "jwan"].join(" ")
+	payload = ["TRACEROUTEEXT", $hostname, dst, 0,time, "true", routingType, path, "jwan"].join(" ")
 	send("TRACEROUTEEXT", payload, dst, routingType, path)
 
 	#start a timer for the next response
@@ -847,8 +847,12 @@ def tracerouteExt(cmd)
 	hopCount = cmd[2].to_i
 	time = cmd[3]
 	forward = cmd[4]
-	routing = cmd[-2]
-	circuitId = cmd[-1]
+	routing = cmd[-3]
+	circuitId = cmd[-2]
+
+	# STDOUT.puts "CMD: " + cmd.to_s
+	# STDOUT.puts "routing: " + routing
+	# STDOUT.puts "circuitId: " + circuitId
 
 	#MARK YOU DID A DIRTY DIRTY HACK WITH THE FORWARD THING
 	#CONSIDER BEING A DECENT HUMAN AND FIXING IT
@@ -864,7 +868,7 @@ def tracerouteExt(cmd)
 		#puts "Time: " + time.to_s
 		#time = time.abs
 		#send the reply and stop forwarding	
-		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing, "jwan"].join(" ")
+		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, "packetSwitching", "-1", "jwan"].join(" ")
 		send("TRACEROUTEEXT", payload, src, "packetSwitching", "-1")
 
 		#if the trace has made it's way back to the source
@@ -915,16 +919,16 @@ def tracerouteExt(cmd)
 		hopCount += 1 #increment hopCount
 
 		#payload to be returned to sender
-		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, routing, "jwan"].join(" ")
+		payload = ["TRACEROUTEEXT", src, dst, hopCount, time, $hostname, "packetSwitching", "-1", "jwan"].join(" ")
 		send("TRACEROUTEEXT", payload, src, "packetSwitching", "-1")
 
 		#payload to be forwarded to destination
-		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing, "jwan"].join(" ")
+		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing, circuitId, "jwan"].join(" ")
 		send("TRACEROUTEEXT", payload,dst, routing, circuitId)
 
 		#now the trace is done so just send the cmd back
 	else
-		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, routing, "jwan" ].join( " ")
+		payload = ["TRACEROUTEEXT", src, dst, hopCount,time, forward, "packetSwitching", "-1", "jwan" ].join( " ")
 		send("TRACEROUTEEXT", payload ,src, "packetSwitching","-1")
 	end
 end
@@ -1078,12 +1082,6 @@ end
 
 
 # --------------------- Part 3 --------------------- # 
-# JUAN ADDED: FUCK JUST REALZIZED THAT THE OUTPUT FOR CIRCUITM NEEDS TO HAVE
-# EXTRA OUTPUT BESIDES THE REGULAR OUTPUT FROM THE OTHER REGULAR FUNCTIONS.
-# REMEMBER TO ADD CIRCUITTYPE ARGUMENT TO EVERY PAYLOAD UNDER FUNCTIONS 
-# UNDER CIRCUITM :(
-
-
 # These functions for circtuiB contains two parts:
 # 	1. Checks if the circuit is possible. 
 # 	This would go through every node in the circuit.
@@ -1120,6 +1118,10 @@ def circuitB(cmd)
 
 	nextNode = circuit.delete_at(0)
 
+	if circuit.empty?
+			circuit = ["empty"]
+	end
+
 	if $neighbor[nextNode]
 		# Send payload
 		payload = ["CIRCUITBEXTCHECK", circuitId, $hostname, dst, circuit.join(","), fullCircuit.join(","), "jwan"].join(" ")
@@ -1137,28 +1139,36 @@ def circuitBExtCheck(cmd)
 	circuit = cmd[3].split(",")
 	fullCircuit = cmd[4].split(",")
 
+	#STDOUT.puts circuit.to_s
 	if $circuit.has_key?(circuitId)
-		payload = ["CIRCUITBEXTERROR", circuitId, src, dst, $hostname, "jwan"]
+		payload = ["CIRCUITBEXTERROR", circuitId, src, dst, $hostname, "jwan"].join(" ")
 		send("CIRCUITBEXTCHECKERROR", payload, src, "packetSwitching" , "-1")
 		STDOUT.puts "The following circuit error was due to one of the nodes already having a circuit with the same ID " + circuitId
 		return
 	end
 
-	if circuit.empty? && dst == $hostname
+	if circuit[0] == "empty" && dst == $hostname
 		# Send positive acknowledgement back to src
-		payload = ["CIRCUITBEXTCHECKPOS", circuitId, src, dst, fullCircuit.join(","), fullCircuit.join(","), "jwan"]
+		payload = ["CIRCUITBEXTCHECKPOS", circuitId, src, dst, fullCircuit.join(","), fullCircuit.join(","), "jwan"].join(" ")
 		send("CIRCUITBEXTCHECKPOS", payload, src, "packetSwitching" , "-1")
 	elsif circuit.empty? && dst != $hostname
 		STDOUT.puts "JUAN ERROR! WE FINISHED THE CIRCUIT PATH BUT SOMEONE DID NOT MANAGE TO END AT DST"
 	else
 		nextNode = circuit.delete_at(0)
+
+		if circuit.empty?
+			circuit = ["empty"]
+		end
+
+		#STDOUT.puts "NextNode: " + nextNode
+		#STDOUT.puts "Neighbors " + $neighbor.to_s
 		if $neighbor[nextNode]
 			# Send payload
 			payload = ["CIRCUITBEXTCHECK", circuitId, src, dst, circuit.join(","), fullCircuit.join(","), "jwan"].join(" ")
 			send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
 		else
 			# Send a negative acknowledgement back to src with this node's name ($hostname)
-			payload = ["CIRCUITBEXTERROR", circuitId, src, dst, $hostname, "jwan"]
+			payload = ["CIRCUITBEXTERROR", circuitId, src, dst, $hostname, "jwan"].join(" ")
 			send("CIRCUITBEXTCHECKERROR", payload, src, "packetSwitching" , "-1")
 		end
 	end 
@@ -1186,6 +1196,10 @@ def circuitBExtCheckPos(cmd)
 
 	nextNode = circuit.delete_at(0)
 
+	if circuit.empty?
+			circuit = ["empty"]
+	end
+	
 	if $neighbor[nextNode]
 		# Send payload
 		$circuit[circuitId][circuitTkn] = nextNode
@@ -1208,20 +1222,24 @@ def circuitBExtBuild(cmd)
 
 	hops = fullCircuit.length
 
-	if circuit.empty? && dst == $hostname
+	if circuit[0] == "empty" && dst == $hostname
 		#Send pos ack to src
 		STDOUT.puts "CIRCUIT " + src + "/" + circuitId + " --> " + dst + " over " + hops.to_s
-		payload = ["CIRCUITBEXTBUILDPOS", circuitId, src, dst, fullCircuit.join(","), "jwan"]
+		payload = ["CIRCUITBEXTBUILDPOS", circuitId, src, dst, fullCircuit.join(","), "jwan"].join(" ")
 		send("CIRCUITBEXTCHECKPOS", payload, src, "packetSwitching" , "-1")
 		return 
 	end
 
 	nextNode = circuit.delete_at(0)
 
+	if circuit.empty?
+			circuit = ["empty"]
+	end
+
 	if $neighbor[nextNode]
 		# Send payload
 		$circuit[circuitId][circuitTkn] = nextNode
-		payload = ["CIRCUITBEXTBUILD", circuitId, circuitTkn.to_s, $hostname, dst, circuit.join(","), "jwan"].join(" ")
+		payload = ["CIRCUITBEXTBUILD", circuitId, circuitTkn.to_s, src, dst, circuit.join(","), fullCircuit.join(","), "jwan"].join(" ")
 		send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
 	else
 		STDOUT.puts "SHIT! " + $hostname + " to " + nextNode + " was disconnected while processing circuitB."
@@ -1234,7 +1252,7 @@ def circuitBExtBuildPos(cmd)
 	circuitId = cmd[0]
 	src = cmd[1]
 	dst = cmd[2]
-	fullCircuit = cmd[3]
+	fullCircuit = cmd[3].split(",")
 
 	hops = fullCircuit.length
 
@@ -1242,20 +1260,30 @@ def circuitBExtBuildPos(cmd)
 		STDOUT.puts "WHERE DAFUQ AM I?"
 		return
 	end
-
 	STDOUT.puts "CIRCUITB " + circuitId + " --> " + dst + " over " + hops.to_s
 end
 
-def circuitM(cmd)
-	circuitId = cmd[0]
-	line = cmd[1] # JUAN MAKE SURE THESE DONT HAVE QUOTATION MARKS
-
-	line = line.strip()
-
-	arr = line.split(' ') # CHANGE THIS TO THE REGEX !!!!!
-	cmd = arr[0]
-	args = arr[1..-1]
+def circuitM(derp)
+	circuitId = derp[0]
+	cmd = derp[1]
+	args = derp[2..-3]
 	args << "circuitSwitching"
+	args << circuitId
+	# line = cmd[1] # JUAN MAKE SURE THESE DONT HAVE QUOTATION MARKS
+
+	# line = line.strip()
+
+	# arr = line.scan(/(((mork)(.*)(mork))+|([\S]+))/)
+	# newArr = Array.new
+	# arr.map {|subArr| newArr << subArr[0] }
+	# cmd = newArr[0]
+	# args = newArr[1..-1]		
+	# args << "circuitSwitching"
+
+	#arr = line.split(' ') # CHANGE THIS TO THE REGEX !!!!!
+	#cmd = arr[0]
+	#args = arr[1..-1]
+	#args << "circuitSwitching"
 	case cmd
 	when "SENDMSG"; sendmsg(args)
 	when "PING"; ping(args)
@@ -1290,15 +1318,15 @@ def circuitDExt(cmd)
 	dst = cmd[2]
 	circuitTkn = cmd[3].to_i + 1
 
-	if !$circuit.has_key?(circuitId) || !$neighbor[$circuit[circuitId][circuitTkn]] 
+	if ( dst != $hostname && ( !$circuit.has_key?(circuitId) || !$circuit[circuitId][circuitTkn] || !$neighbor[$circuit[circuitId][circuitTkn]] ) )
 		payload = ["CIRCUITDEXTERROR", circuitId, $hostname, dst, "jwan"].join(" ")
-		send("CIRCUITBEXTCHECK", payload, src, "packetSwitching" , "-1")
+		send("CIRCUITDEXTERROR", payload, src, "packetSwitching" , "-1")
 
 		if !$neighbor[$circuit[circuitId][circuitTkn]]
 			$circuit.delete(circuitId)
 		end
 
-	else
+	elsif dst != $hostname || $circuit[circuitId][circuitTkn] 
 		nextNode = $circuit[circuitId][circuitTkn]
 		$circuit[circuitId].delete(circuitTkn)
 
@@ -1306,9 +1334,20 @@ def circuitDExt(cmd)
 			$circuit.delete(circuitId)
 		end
 
-		payload = ["CIRCUITDEXT", circuitId, src, dst, circuitTkn, "jwan"].join(" ")
-		send("CIRCUITBEXTCHECK", payload, nextNode, "packetSwitching" , "-1")
-	end 
+		payload = ["CIRCUITDEXT", circuitId, src, dst, circuitTkn.to_s, "jwan"].join(" ")
+		send("CIRCUITDEXT", payload, nextNode, "packetSwitching" , "-1")
+	else 
+		payload = ["CIRCUITDEXTPOS", circuitId, dst, circuitTkn.to_s, "jwan"].join(" ")
+		send("CIRCUITDEXTPOS", payload, src, "packetSwitching", "-1")
+	end
+end
+
+def circuitDExtPos(cmd)
+	circuitId = cmd[0]
+	dst = cmd[1]
+	hops = cmd[2].to_i - 1
+
+	STDOUT.puts "CIRCUITD " + circuitId + " --> " + dst + " over " + hops.to_s
 end
 
 def circuitDExtError(cmd)
@@ -1338,9 +1377,9 @@ and execute them.
 def executeCmdLin()
 	#temp = $cmdLinBuffer.clone
 	#$cmdLinBuffer = Array.new
-	if !$cmdLinBuffer.empty?
-		puts "CMD LIN BUFF: " + $cmdLinBuffer.to_s
-	end
+	#if !$cmdLinBuffer.empty?
+	#	puts "CMD LIN BUFF: " + $cmdLinBuffer.to_s
+	#end
 	while(!$cmdLinBuffer.empty?)
 		line = $cmdLinBuffer.delete_at(0)
 		line = line.strip()
@@ -1359,7 +1398,7 @@ def executeCmdLin()
 		args = newArr[1..-1]		
 		args << "packetSwitching"
 		args << "-1"
-		puts "CmdLinCmd+Args: "+ cmd + args.to_s
+		#puts "CmdLinCmd+Args: "+ cmd + args.to_s
 		#=end
 
 		case cmd
@@ -1374,9 +1413,9 @@ def executeCmdLin()
 		when "TRACEROUTE"; traceroute(args)
 		when "FTP"; ftp(args)
 		when "hostname"; puts $hostname
-		when "CIRCUITM"; circuitm(args)
-		when "CIRCUITB"; circuitb(args)
-		when "CIRCUITD"; circuitd(args)
+		when "CIRCUITM"; circuitM(args)
+		when "CIRCUITB"; circuitB(args)
+		when "CIRCUITD"; circuitD(args)
 		when "updateInterval"; puts $updateInterval
 		when "maxPayload"; puts $maxPayload
 		when "pingTimeout"; puts $pingTimeout
@@ -1399,9 +1438,9 @@ and execute them.
 def executeCmdExt()
 	#temp = $extCmdBuffer.clone
 	#$extCmdBuffer = Array.new
-	if !$extCmdBuffer.empty?
-	puts "CMD LIN EXT BUFF: " + $extCmdBuffer.to_s
-	end
+	#if !$extCmdBuffer.empty?
+	#puts "CMD LIN EXT BUFF: " + $extCmdBuffer.to_s
+	#end
 	while(!$extCmdBuffer.empty?)
 		#	puts "inside getCmdExt"
 
@@ -1423,7 +1462,7 @@ def executeCmdExt()
 		cmd = newArr[0]
 		args = newArr[1..-1]
 		#args << "packetSwitching"
-		puts "CmdLinExtCmd+Args: " + cmd  + args.to_s
+		#puts "CmdLinExtCmd+Args: " + cmd  + args.to_s
 		#=end
 		case cmd
 		when "PINGEXT"; pingExt(args)
@@ -1439,6 +1478,7 @@ def executeCmdExt()
 		when "CIRCUITBEXTBUILD"; circuitBExtBuild(args)
 		when "CIRCUITBEXTBUILDPOS"; circuitBExtBuildPos(args)
 		when "CIRCUITDEXT"; circuitDExt(args)
+		when "CIRCUITDEXTPOS"; circuitDExtPos(args)
 		when "CIRCUITDEXTERROR"; circuitDExtError(args)
 		else STDOUT.puts "ERROR: INVALID COMMAND in getCmdExt\"#{cmd}\""
 		end
@@ -1480,7 +1520,7 @@ def serverThread()
 						#because a connection
 						#no longer exist so the 
 						#node is no longer 
-						#a neighbor
+					#a neighbor
 
 						#	edged(nextHop)
 
@@ -1499,9 +1539,9 @@ def serverThread()
 						#puts "putting data in buffer"
 						buffer = sock.gets("poleen")
 						if buffer != nil && buffer.length > 1	
-							puts
-							puts "SERVERGOT: " + buffer
-							puts
+							#puts
+							#puts "SERVERGOT: " + buffer
+							#puts
 							buffer.strip!
 							buffer.gsub!("poleen","")
 							$recvBuffer << buffer
@@ -1534,14 +1574,28 @@ def processPackets()
 	totLen = nil
 	checkPackets = nil
 	#	loop do
-	if(!$recvBuffer.empty?)
-	puts "RECVBUFF: " + $recvBuffer.to_s
-	end
+	#if(!$recvBuffer.empty?)
+	#puts "RECVBUFF: " + $recvBuffer.to_s
+	#end
 	while (!$recvBuffer.empty?)
 		#puts "data in recv buffer"
 		packet = $recvBuffer.delete_at(0)
+		circuitId = getHeaderVal(packet, "circuitId")
+		circuitTkn = getHeaderVal(packet, "circuitTkn").to_i + 1
 		#STDOUT.puts "Packet in process " + packet
-		if ($hostname == getHeaderVal(packet,"dst") || getHeaderVal(packet, "cmd") == "TRACEROUTEEXT" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTCHECK" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTBUILD" )
+		if getHeaderVal(packet, "routingType") == "circuitSwitching" && $hostname == getHeaderVal(packet, "dst") && $circuit[circuitId] && !$circuit[circuitId][circuitTkn]
+			src = getHeaderVal(packet,"src")
+			id = getHeaderVal(packet, "id").to_i
+			offset = getHeaderVal(packet, "fragOffset").to_i
+			$packetHash[src][id][offset] = packet	
+			checkPackets = true
+		elsif (getHeaderVal(packet, "routingType") == "packetSwitching" && ($hostname == getHeaderVal(packet,"dst") || getHeaderVal(packet, "cmd") == "TRACEROUTEEXT" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTCHECK" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTBUILD") )
+			src = getHeaderVal(packet,"src")
+			id = getHeaderVal(packet, "id").to_i
+			offset = getHeaderVal(packet, "fragOffset").to_i
+			$packetHash[src][id][offset] = packet	
+			checkPackets = true
+		elsif getHeaderVal(packet, "routingType") == "circuitSwitching" && (getHeaderVal(packet, "cmd") == "TRACEROUTEEXT" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTCHECK" || getHeaderVal(packet, "cmd") == "CIRCUITBEXTBUILD")
 			src = getHeaderVal(packet,"src")
 			id = getHeaderVal(packet, "id").to_i
 			offset = getHeaderVal(packet, "fragOffset").to_i
@@ -1551,6 +1605,7 @@ def processPackets()
 			#puts
 			#puts $hostname + " FORWARDING PACKET: " + packet.to_s
 			#puts
+
 			forwardPacket(packet)
 
 			#puts "Src: "+ src 
@@ -1571,18 +1626,21 @@ def processPackets()
 					packet = idHash[k]
 					totLen = getHeaderVal(packet, "totLen").to_i
 					sum = sum + getHeaderVal(packet, "len").to_i
-				}
+				#puts "TOTLEN AND SUM: " + totLen.to_s + " " + sum.to_s
 
+				}
+				#puts $packetHash["n1"][1].to_s
+				#puts "TOTLEN AND SUM: " + totLen.to_s + " " + sum.to_s
 				if totLen!= nil && totLen == sum
 					#puts "totLen"
 					msg = reconstructMsg(idHash)
-					puts
-					puts "MSG: " + msg.to_s
-					puts 
+					#puts
+					#puts "MSG: " + msg.to_s
+					#puts 
 					$extCmdBuffer << msg
 					$packetHash[srcKey].delete(idKey)
 
-				end
+				end	
 			}
 		}
 		checkPackets = nil
@@ -1607,6 +1665,7 @@ the Hash contains one single message. The key is the offset value of that
 packet. Sort puts them in order of offset and then reassembles all the 
 packets
 =end
+	#puts "RECONSTRUCTMESSAGE CALLED WITH: " + packetHash.to_s
 	packetHash.keys.sort.each { |offset,val| 
 		msg += packetHash[offset].partition(":")[2]
 	}
@@ -1624,7 +1683,8 @@ def send(cmd, msg, dst, routingType, circuitId)
 	#puts "SEND ROUTING TYPE AND CIRCUIT: " + routingType + " " + circuitId
 	#puts "MSG SIZE: " + msg.length.to_s
 	#puts "Max Payload: " + $maxPayload.to_s  
-	
+	#STDOUT.puts "Sending: " + msg
+
 	fragments = msg.chars.to_a.each_slice($maxPayload).to_a.map{|s|
 		s.join("")} #.to_s
 
@@ -1633,14 +1693,15 @@ def send(cmd, msg, dst, routingType, circuitId)
 	#puts "End Fragments"
 
 	if cmd == "TRACEROUTEEXT" && routingType == "circuitSwitching"
-		circuitTkn = msg[2]
+		circuitTkn = msg.split(" ")[3]
+		#STDOUT.puts "circuitTkn: " + circuitTkn
 	else
 		circuitTkn = "0"
 	end
 
 	if routingType == "circuitSwitching"
-
 		nextDst = $circuit[circuitId][circuitTkn.to_i]
+		#STDOUT.puts "circuit: " + $circuit[circuitId].to_s
 	else
 		nextDst = $nextHop[dst]
 	end
@@ -1710,8 +1771,9 @@ def forwardPacket(packet)
 	elsif getHeaderVal(packet, "routingType") == "circuitSwitching"
 		circuitId = getHeaderVal(packet, "circuitId")
 		circuitTkn = getHeaderVal(packet, "circuitTkn").to_i + 1
-
-		nextDst = $circuit[circuitId][circuitTknt]
+		#STDOUT.puts circuitTkn
+		#STDOUT.puts $circuit[circuitId].to_s
+		nextDst = $circuit[circuitId][circuitTkn]
 
 		if !nextDst
 			puts "No next dst :( in forwardPakcet"
@@ -1722,7 +1784,7 @@ def forwardPacket(packet)
 		payload = packet.partition(":")[2]
 		headerElements = header.split(",")
 		headerElements[11] = "circuitTkn=" + circuitTkn.to_s
-		headerElements = headerElements.join(",")
+		header = headerElements.join(",")
 		packet = header + ":" + payload
 	else
 		STDOUT.puts "SOMETHING WENT WRONG IN FORWARD PACKETS. HEADER VALUE FOR ROUTINGTYPE IS INCORRECT"
@@ -1736,8 +1798,8 @@ def forwardPacket(packet)
 		payload = packet.partition(":")[2]
 		headerElements = header.split(",")
 		headerElements[8] = "ttl=" + (getHeaderVal(packet, "ttl").to_i - 1).to_s
-		headerElements = headerElements.join(",")
-		packet = header + ":" + payload
+		header = headerElements.join(",")
+		packet = header + ":" + payload + "poleen"
 		tcpSend(packet, nextDst) # USED TO BE $nextHop[dst]
 	else
 		STDOUT.puts "A PACKET DIED IN " + $hostname
